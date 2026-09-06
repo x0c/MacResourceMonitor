@@ -20,6 +20,10 @@ nonisolated enum TableRowPinning {
 }
 
 /// 悬停结束钮时的钉行状态机；进程表与网络表行为一致。
+///
+/// `visibleIndex` 必须由调用方在拿到本函数的 `inout` 钉位引用**之前**算好。
+/// 若在已独占 `pinnedRowID` 时再经 `@Observable` 读 `visibleRows`（内部再读钉位），
+/// Swift 会报独占冲突并 SIGABRT（见 2026-09-06 网络表结束钮悬停闪退）。
 @MainActor
 enum PinnedEndHover {
     static func apply(
@@ -28,7 +32,7 @@ enum PinnedEndHover {
         pinnedRowID: inout String?,
         pinnedIndex: inout Int?,
         unpinTask: inout Task<Void, Never>?,
-        visibleIndexForRow: () -> Int?,
+        visibleIndex: Int?,
         clearPin: @escaping () -> Void,
         currentPinnedID: @escaping () -> String?
     ) {
@@ -36,7 +40,7 @@ enum PinnedEndHover {
             unpinTask?.cancel()
             unpinTask = nil
             if pinnedRowID != rowID {
-                pinnedIndex = visibleIndexForRow()
+                pinnedIndex = visibleIndex
                 pinnedRowID = rowID
             }
             return

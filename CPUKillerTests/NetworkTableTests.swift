@@ -70,6 +70,14 @@ final class NetworkTableRankingTests: XCTestCase {
         XCTAssertEqual(quiet.rows.first?.uploadBytesPerSecond, 0)
     }
 
+    /// 旧实现在 inout 钉位期间经 visibleRows 回读同一属性，会 SIGABRT；空名单也能复现。
+    @MainActor
+    func testNetworkListSetEndHoverDoesNotTripExclusivity() {
+        let model = NetworkListModel(processRows: { [] })
+        model.setEndHover(true, rowID: "ghost")
+        model.setEndHover(false, rowID: "ghost")
+    }
+
     func testHoldExpiresAfterFiveSecondsWithoutTraffic() {
         let chrome = makeProcess(name: "Google Chrome", pid: 42)
         let now = Date(timeIntervalSince1970: 1_000)

@@ -57,6 +57,7 @@ open '/Applications/CPU Killer.app'
 | 陈旧中间产物 | 派生目录与并行构建共用 | 独立 `-derivedDataPath` |
 | 安装后旧图标 / 旧版本 | 未整包替换 | 删旧应用后完整复制再启动 |
 | 菜单栏应用「消失」 | 图标被藏、恢复窗未出 | 从应用程序 / Spotlight 再开，确认恢复窗 |
+| 悬停结束符号瞬间闪退 | 崩溃报告 `SIGABRT` + `_swift_reportExclusivityConflict`，栈在钉位悬停 | 先算可见索引再改钉位；见进程监控知识库 §2.5 与 `_standards/.../macos-appkit-gotchas.md` |
 
 ## 未替代的验收
 

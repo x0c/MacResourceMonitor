@@ -114,6 +114,52 @@ final class ProcessTableRankingTests: XCTestCase {
         XCTAssertTrue(visible.contains { $0.displayName == "Busy0" })
     }
 
+    @MainActor
+    func testPinnedEndHoverUsesPrecomputedIndex() {
+        var pinnedRowID: String?
+        var pinnedIndex: Int?
+        var unpinTask: Task<Void, Never>?
+        PinnedEndHover.apply(
+            hovering: true,
+            rowID: "B",
+            pinnedRowID: &pinnedRowID,
+            pinnedIndex: &pinnedIndex,
+            unpinTask: &unpinTask,
+            visibleIndex: 1,
+            clearPin: {
+                pinnedRowID = nil
+                pinnedIndex = nil
+            },
+            currentPinnedID: { pinnedRowID }
+        )
+        XCTAssertEqual(pinnedRowID, "B")
+        XCTAssertEqual(pinnedIndex, 1)
+
+        PinnedEndHover.apply(
+            hovering: true,
+            rowID: "B",
+            pinnedRowID: &pinnedRowID,
+            pinnedIndex: &pinnedIndex,
+            unpinTask: &unpinTask,
+            visibleIndex: 99,
+            clearPin: {
+                pinnedRowID = nil
+                pinnedIndex = nil
+            },
+            currentPinnedID: { pinnedRowID }
+        )
+        XCTAssertEqual(pinnedIndex, 1, "同一行再次悬停不得改写已钉索引")
+    }
+
+    /// 旧实现在 inout 钉位期间经 visibleRows 回读同一属性，会 SIGABRT；空名单也能复现。
+    @MainActor
+    func testProcessListSetEndHoverDoesNotTripExclusivity() {
+        let model = ProcessListModel()
+        defer { model.stop() }
+        model.setEndHover(true, rowID: "ghost")
+        model.setEndHover(false, rowID: "ghost")
+    }
+
     private func makeRow(name: String, cpu: Double, memory: Double) -> ProcessRow {
         ProcessRow(
             id: name,

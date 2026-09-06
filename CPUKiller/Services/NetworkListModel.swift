@@ -133,15 +133,18 @@ final class NetworkListModel {
     }
 
     func setEndHover(_ hovering: Bool, rowID: String) {
+        // 先读可见索引，再对钉位做 inout；避免 Observation 与独占借用叠在同一属性上闪退。
+        let visibleIndex: Int? = {
+            guard hovering, pinnedRowID != rowID else { return nil }
+            return visibleRows.firstIndex { $0.id == rowID }
+        }()
         PinnedEndHover.apply(
             hovering: hovering,
             rowID: rowID,
             pinnedRowID: &pinnedRowID,
             pinnedIndex: &pinnedIndex,
             unpinTask: &unpinTask,
-            visibleIndexForRow: { [weak self] in
-                self?.visibleRows.firstIndex { $0.id == rowID }
-            },
+            visibleIndex: visibleIndex,
             clearPin: { [weak self] in self?.clearPin() },
             currentPinnedID: { [weak self] in self?.pinnedRowID }
         )
