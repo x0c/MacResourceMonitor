@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appUpdater = SparkleUpdateChecker()
     private let terminationGuard = TerminationGuard()
     private var commaMonitor: Any?
+    /// 后台就绪时刻；菜单栏即主入口的二次启动防呆用。
+    private var readyAt = Date()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -72,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 图标始终可见；登录项拉起时仍传入判定，禁止自动弹设置窗。
         let isLoginLaunch = LoginLaunchDetector.isLaunchedAsLoginItem
+        readyAt = Date()
         if MenuBarReopenPolicy.shouldShowRecoveryWindow(
             iconVisible: true,
             isLoginLaunch: isLoginLaunch
@@ -93,10 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // 菜单栏即主入口：时间窗内二次打开须出设置窗（含检查更新等对等入口），与图标可见无关。
         if MenuBarReopenPolicy.presentation(
             iconVisible: true,
             isReopenOrLaunch: true,
-            isLoginLaunch: false
+            isLoginLaunch: false,
+            menubarIsPrimaryEntry: true,
+            secondsSinceReady: Date().timeIntervalSince(readyAt)
         ) == .showRecoveryWindow {
             showRecoveryWindow()
         }

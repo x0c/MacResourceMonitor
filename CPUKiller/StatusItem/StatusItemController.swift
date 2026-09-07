@@ -135,11 +135,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         button.contentTintColor = nil
         button.setAccessibilityLabel(String(localized: "status.item.accessibility"))
         button.target = self
-        button.action = target == .process ? #selector(openProcessPanel(_:)) : #selector(openNetworkPanel(_:))
-        button.sendAction(on: [.leftMouseUp])
-        let rightClick = NSClickGestureRecognizer(target: self, action: #selector(showContextMenuFromGesture(_:)))
-        rightClick.buttonMask = 0x2
-        button.addGestureRecognizer(rightClick)
+        // 状态栏按钮会吞掉右键；NSClickGestureRecognizer 的 buttonMask=右键经常收不到。
+        // 必须用 sendAction 同时接收左右键抬起，再按当前事件分流。
+        button.action = target == .process ? #selector(handleRingClick(_:)) : #selector(handleNetworkClick(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     func updateMetrics(cpuPercent: Double, memoryPercent: Double) {
@@ -192,22 +191,37 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc
-    private func openProcessPanel(_ sender: Any?) {
-        activeStatusItem = ringStatusItem
-        onOpenPanel(.process)
+    private func handleRingClick(_ sender: Any?) {
+        handleStatusItemClick(statusItem: ringStatusItem) {
+            self.onOpenPanel(.process)
+        }
     }
 
     @objc
-    private func openNetworkPanel(_ sender: Any?) {
-        activeStatusItem = networkStatusItem
-        onOpenPanel(.networkDownload)
+    private func handleNetworkClick(_ sender: Any?) {
+        handleStatusItemClick(statusItem: networkStatusItem) {
+            self.onOpenPanel(.networkDownload)
+        }
     }
 
-    @objc
-    private func showContextMenuFromGesture(_ sender: NSClickGestureRecognizer) {
-        guard sender.state == .ended else { return }
-        activeStatusItem = sender.view === ringStatusItem.button ? ringStatusItem : networkStatusItem
-        activeStatusItem?.popUpMenu(menu)
+    private func handleStatusItemClick(statusItem: NSStatusItem, openPanel: () -> Void) {
+        activeStatusItem = statusItem
+        guard let event = NSApp.currentEvent else {
+            openPanel()
+            return
+        }
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            showContextMenu(on: statusItem)
+        } else {
+            openPanel()
+        }
+    }
+
+    /// 临时挂上菜单再 performClick，避免常挂劫持左键；勿用不可靠的手势或已弃用的 popUpMenu。
+    private func showContextMenu(on statusItem: NSStatusItem) {
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
     }
 
     @objc

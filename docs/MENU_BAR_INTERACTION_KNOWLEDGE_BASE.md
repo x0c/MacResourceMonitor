@@ -91,18 +91,20 @@ graph TD
 
 ### 路径三：右键菜单与偏好改变
 
-1. 用户右键，或按住 Control 点击，状态项自己的点击层临时显示 `NSMenu`；左键没有菜单挂载，因此不会被系统菜单劫持。
+1. 用户右键，或按住 Control 点击：状态项按钮经 `sendAction(on: [.leftMouseUp, .rightMouseUp])` 收到抬起事件后，临时把 `NSMenu` 挂到该项再 `performClick`，随后立刻卸掉；左键没有常挂菜单，因此不会被系统菜单劫持。
 2. `StatusItemController.menuNeedsUpdate()` 每次打开菜单先刷新开机自启状态，再把开、关、待批准映射为勾选、未勾选、中间态；仅待批准时显示跳转到系统登录项的入口。
 3. 选择“显示网速”时，`StatusItemController.toggleNetworkSpeed()` 改 `MenuBarDisplayPreferences.showsNetworkSpeed` 并重绘。该偏好进入本机默认值，下次启动仍有效。
 4. 选择开机自启时，`StatusItemController.toggleLaunchAtLogin()` 先刷新实际状态，再经 `LaunchAtLoginManager.setEnabled()` 请求切换；已处于待批准而用户仍想开时，引导系统设置而不是假装成功。
 5. 选择设置、打开主窗口、检查更新或退出时，分别进入 `AppDelegate.showSettings()`、`AppDelegate.showRecoveryWindow()`、`AppDelegate.checkForUpdates()`、`AppDelegate.requestTermination()`。它们不是进程表的替代入口。
+
+**【排错结论 2026-09-07】右键菜单栏图标完全没反应**：拆成双状态项时曾改用 `NSClickGestureRecognizer(buttonMask: 右键)` + `popUpMenu`。状态栏按钮会吞掉右键，该手势在不少机器上永远进不了 `.ended`，表现为右键零反馈、左键仍正常。必须改回 `sendAction(on: [.leftMouseUp, .rightMouseUp])`，按 `NSApp.currentEvent` 分流，右键临时挂菜单再 `performClick` 后卸掉。禁止再对手势识别器赌右键；跨产品同构见全局菜单栏指南。
 
 ### 路径四：设置窗与登录静默（禁止藏图标）
 
 1. **【裁定 2026-09-05】** 产品禁止隐藏菜单栏图标：右键无「隐藏菜单栏图标」，设置无「显示菜单栏图标」，不持久化图标显隐。
 2. 用户主动选「打开主窗口」或「设置」时，`SettingsWindowController.show()` 出示带标题栏窗口：仍在工作、开机自启、检查更新；位置用保存名恢复。
 3. 登录项拉起：`LoginLaunchDetector.isLaunchedAsLoginItem == true` 时，`MenuBarReopenPolicy` 返回不弹窗；禁止 `showRecoveryWindow` / `SettingsWindowController.show`。
-4. 用户从应用程序 / Spotlight 再次打开时，因图标始终可见，`presentation(iconVisible:true, …)` 为 `.none`，不自动弹窗；需要窗口时走菜单。
+4. 用户从应用程序 / Spotlight 再次打开时：按全局【裁定 2026-09-07】，本产品属菜单栏即主入口——就绪后默认 60 秒内 reopen 须出设置窗（`menubarIsPrimaryEntry: true` + `secondsSinceReady`），**与图标始终可见无关**；超时且图标可见可不自动弹窗。登录拉起仍静默。设置窗须含右键对等能力（含**检查更新**）。
 5. 关闭设置窗只结束窗口激活会话，不退出应用。
 
 ### 路径五：持续绘制、网速显示与退出例外
@@ -203,6 +205,7 @@ graph TD
 **跨产品权威（先读再改）**：登录静默、禁止藏图标（图标即主入口）、左键勿常挂系统菜单、多状态项命中、浮层锚定与点外保留区、显示开关≠停采样、状态项外框宽度防抖、更新会话退出守卫 → `~/.config/agentsync/docs/MACOS_APP_DEVELOPMENT_GUIDE.md`「AppKit 左键主路径与多入口命中」与登录/隐藏裁定。本节约产品专有。
 
 - 【禁止】以 `MenuBarExtra` 代替左键主路径；圆环与网速必须是两个独立 `NSStatusItem`（圆环只开 CPU/内存表，网速只开网络表且默认 Download 降序）；先建网速项再建圆环项以固定「圆环在左」。禁止叠透明子视图或从 `NSApp.currentEvent` 切坐标（原因：菜单栏局部命中不可靠，已多次错送）。
+- 【禁止】用 `NSClickGestureRecognizer` 的右键 `buttonMask` 接状态项右键；状态栏按钮会吞事件，右键常完全无菜单。左右键一律 `sendAction(on: [.leftMouseUp, .rightMouseUp])`，右键临时挂 `menu` + `performClick` 后卸掉（与 MacKitStatusItem / HandySwitch 同构）。
 - **AI 易错点**【锚定 / 点外】实现须符合全局锚定与保留区规则；本产品入口：`StatusItemController.buttonScreenFrame()`、`PanelPlacement.isMenuBarAnchor()`、`AppDelegate.showPanelBelowStatusItem()`、`PanelDismiss.shouldHide()`。
 - 【隐性依赖】面板显示状态必须通过 `CompactPanel.onVisibilityChange` 回传给 `ProcessListModel` → 面板收起时停止进程列表更新，面板显示时才允许更新（原因：列表刷新与菜单栏双环不是同一刷新开关）。
 - 【隐性依赖】网络表必须复用进程表的责任对象、图标和结束限制 -> 按成员进程汇总系统 `nettop` 的上下行速率，结束仍走同一条安全结束边界；不得改成裸 PID 列表（原因：否则会把同一应用拆散，或绕过系统进程与其他用户的保护）。

@@ -1,0 +1,11 @@
+start Mon Sep  7 11:38:33 CST 2026
+/tmp/codesign-ts-poll: The timestamp service is not available.
+timestamp still down try=1 Mon Sep  7 11:38:38 CST 2026
+restart Mon Sep  7 11:39:20 CST 2026
+/tmp/codesign-ts-poll: replacing existing signature
+/tmp/codesign-ts-poll: The timestamp service is not available.
+timestamp still down try=1 Mon Sep  7 11:39:25 CST 2026
+restart2 Mon Sep  7 11:40:16 CST 2026
+/tmp/codesign-ts-poll: replacing existing signature
+/tmp/codesign-ts-poll: The timestamp service is not available.
+timestamp still down try=1 Mon Sep  7 11:40:21 CST 2026

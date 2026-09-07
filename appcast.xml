@@ -6,6 +6,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>CPU Killer</title>
         <item>
+            <title>1.0.20</title>
+            <pubDate>Mon, 07 Sep 2026 14:39:34 +0800</pubDate>
+            <link>https://github.com/x0c/CPUKiller</link>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>1.0.20</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.20/CPU-Killer-1.0.20.zip" length="3662324" type="application/octet-stream" sparkle:edSignature="Kdmpeqo9wBMt9kBUgl6MelN1hwWVMdvoSh3WCOuWEgS0KTsEUKFGAxrWR51uN4UrDtcV3R0bA4qWzVs95JApCQ=="/>
+        </item>
+        <item>
             <title>1.0.19</title>
             <pubDate>Sun, 06 Sep 2026 20:29:48 +0800</pubDate>
             <link>https://github.com/x0c/CPUKiller</link>
@@ -86,18 +95,9 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.4/CPU-Killer-1.0.4.zip" length="3646605" type="application/octet-stream" sparkle:edSignature="qOK8JNZ1+msGiy0EUR4qipgZMv6Gx5wr0d7XUC99FpCrUhp79eol1jbR3plFn8V7PVSNhrMUCta7ysxALQLXBg=="/>
         </item>
-        <item>
-            <title>1.0.1</title>
-            <pubDate>Tue, 01 Sep 2026 22:17:51 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.1/CPU-Killer-1.0.1.zip" length="3443153" type="application/octet-stream" sparkle:edSignature="zzd93OaGcpluXCkt/R+w8jBZYKKZ5YlmxNrBvyw40IYWnSlmF+sHMA5Yz+yMfFa0c88VuodM33aKB41z3SNRDw=="/>
-        </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: EbD2zTPN2SPJCO85wT9HlnDu//z7Y8SsAux8a+5iJ3UOLMMhj/uhnJCI2OtuLiBb2i4V3lhXhu4R9IH8rdAoBA==
-length: 7034
+edSignature: URR4Gml3GjlDGBDgutLCDdNwD7V/8unu5zS48fpw7mJ0P6NOP+oBS68xd623C6lpeHMU9VgybFCgNik+/5AICQ==
+length: 7038
 -->
