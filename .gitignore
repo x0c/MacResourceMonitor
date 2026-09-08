@@ -13,3 +13,4 @@ Packages/
 TASKBOARD.md
 scripts/publish-local.env
 .build-menubar-fix/
+logs/

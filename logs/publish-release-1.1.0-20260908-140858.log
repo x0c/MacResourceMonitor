@@ -1,9 +1,0 @@
-
-[1;34m▶ 检查前置条件[0m
-
-[1;34m▶ 本次发布版本：v1.1.0（内部构建号 34）[0m
-
-[1;34m▶ 生成 Xcode 工程并做 Release 构建[0m
-Command line invocation:
-    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release -destination platform=macOS -derivedDataPath build/DerivedData -allowProvisioningUpdates build
-
