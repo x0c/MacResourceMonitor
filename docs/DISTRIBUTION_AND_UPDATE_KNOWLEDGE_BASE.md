@@ -153,6 +153,7 @@ flowchart TD
 - 【禁止】手改已签名 `appcast.xml`；必须用本仓 `scripts/publish-release.sh` 调用的 Sparkle 工具生成并校验。
 - 【必须】公开快照走 `push_github_snapshot()`，禁止把私有 origin 历史/内网地址推到 `x0c/MacResourceMonitor`；发布前按公开仓规则做泄漏扫描。
 - 【必须】公开 appcast 与 Homebrew cask `x0c/tap` 的 `mac-resource-monitor` 不得回退版本（脚本已检）。
+- **【裁定 2026-09-08 · 全量更名执行顺序】** 零残留改名时：① 先锁展示名 / 工程目录 / 应用身份 / 公开仓 / 一键安装配方 / 产品根目录映射并写入产品契约；② 批量替换时禁止保留「旧→新」对照表里的旧字面量（会把两侧一起改坏），改完后只写「已落地」终态；③ `publish-release.sh` 必须用会话托管的后台任务跑完（裸 `nohup … &` 易被父 shell 收掉）；④ **发版完成后再** `mv` 本机产品根目录——脚本启动时固化的绝对路径在改名后会失效；⑤ 发版日志不得入库（`logs/` 进 ignore），公开仓用 `push_github_snapshot()` 再推一棵无日志树；⑥ 旧 Homebrew 配方文件删掉，只留新配方名。
 - 【禁止】为更新/安装新增账号、遥测、服务端任务、Mac App Store、沙盒、辅助功能或完整磁盘访问。
 - 【叫法】“安装、更新与公开发布”覆盖 DMG、Sparkle、GitHub Release 和 Homebrew；`AppUpdater` / `appcast.xml` / `publish-release.sh` / cask 是入口名，不是四个独立业务域。
 
