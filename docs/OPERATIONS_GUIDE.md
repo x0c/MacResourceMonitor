@@ -4,7 +4,7 @@
 
 ## 本地启动前检查
 
-- Git 仓是 `app-macos/`；外层 CPUKiller 目录不是 Git 工作树。
+- Git 仓是 `app-macos/`；外层 MacResourceMonitor 目录不是 Git 工作树。
 - `project.yml` 是 Xcode 工程唯一来源；改源文件清单 / 资源 / 构建设置后须 `xcodegen generate`。
 - 构建依赖 Sparkle 与 MacKit；无缓存时需可用包下载环境。
 - 版本 / 签名 / 公开发行见 [DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md](DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)。
@@ -15,30 +15,30 @@
 
 ```bash
 xcodegen generate
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -configuration Release \
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build/DerivedData build
 ```
 
 回归测试用独立派生目录：
 
 ```bash
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller \
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
   -destination 'platform=macOS' \
-  -derivedDataPath /tmp/cpu-killer-derived-data test
+  -derivedDataPath /tmp/mac-resource-monitor-derived-data test
 ```
 
 改菜单栏 / 进程表 / 网速后，仍要跑受影响的完整测试组。自动测试通过 ≠ 安装版菜单栏 / 结束 / 签名验收。
 
 ## 覆盖安装
 
-产物：`build/DerivedData/Build/Products/Release/CPU Killer.app`
+产物：`build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`
 
 仅在「应用程序」可无交互写入时：
 
 ```bash
-rm -rf '/Applications/CPU Killer.app'
-ditto 'build/DerivedData/Build/Products/Release/CPU Killer.app' '/Applications/CPU Killer.app'
-open '/Applications/CPU Killer.app'
+rm -rf '/Applications/Mac Resource Monitor.app'
+ditto 'build/DerivedData/Build/Products/Release/Mac Resource Monitor.app' '/Applications/Mac Resource Monitor.app'
+open '/Applications/Mac Resource Monitor.app'
 ```
 
 要管理员授权 → 立刻停，禁止弹图形授权。禁止用 Debug / 临时签名覆盖 Developer ID 安装版。

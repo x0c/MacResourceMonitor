@@ -1,103 +1,19 @@
-<?xml version="1.0" standalone="yes"?>
-<!-- sparkle-sign-warning:
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
--->
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
-        <title>CPU Killer</title>
+        <title>Mac Resource Monitor</title>
         <item>
-            <title>1.0.20</title>
-            <pubDate>Mon, 07 Sep 2026 14:39:34 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>31</sparkle:version>
-            <sparkle:shortVersionString>1.0.20</sparkle:shortVersionString>
+            <title>1.1.0</title>
+            <pubDate>Tue, 08 Sep 2026 14:17:49 +0800</pubDate>
+            <link>https://github.com/x0c/MacResourceMonitor</link>
+            <sparkle:version>34</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.20/CPU-Killer-1.0.20.zip" length="3662324" type="application/octet-stream" sparkle:edSignature="Kdmpeqo9wBMt9kBUgl6MelN1hwWVMdvoSh3WCOuWEgS0KTsEUKFGAxrWR51uN4UrDtcV3R0bA4qWzVs95JApCQ=="/>
-        </item>
-        <item>
-            <title>1.0.19</title>
-            <pubDate>Sun, 06 Sep 2026 20:29:48 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>30</sparkle:version>
-            <sparkle:shortVersionString>1.0.19</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.19/CPU-Killer-1.0.19.zip" length="3658944" type="application/octet-stream" sparkle:edSignature="H663m5ZwKgtgEt/4Gto5RY2eKmg3uITVRD/8Wzrbm7OncvRlpifC/EBnxG5KQBggA9ueSUkttJu20yekLEPtDA=="/>
-        </item>
-        <item>
-            <title>1.0.18</title>
-            <pubDate>Sun, 06 Sep 2026 00:09:21 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>29</sparkle:version>
-            <sparkle:shortVersionString>1.0.18</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.18/CPU-Killer-1.0.18.zip" length="3658657" type="application/octet-stream" sparkle:edSignature="QQ4ry3YJVLhvhJxiACk309OZqxUNMAJVHW8BgPXLdJZu1q7LHhwk1hOg4qjB5e6iuHODAFjIs1zDr2NLsmmsBw=="/>
-        </item>
-        <item>
-            <title>1.0.16</title>
-            <pubDate>Sat, 05 Sep 2026 21:58:55 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>27</sparkle:version>
-            <sparkle:shortVersionString>1.0.16</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.16/CPU-Killer-1.0.16.zip" length="3647119" type="application/octet-stream" sparkle:edSignature="LYrtM1rflr8I/ZgMvlghsveZevjbUbbau2UyYNb7H5B/wlMcuq63Y3KNI3A1c+wZRsu7PjeeJPKwo5kWpGBtBQ=="/>
-        </item>
-        <item>
-            <title>1.0.14</title>
-            <pubDate>Sat, 05 Sep 2026 18:18:05 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>25</sparkle:version>
-            <sparkle:shortVersionString>1.0.14</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.14/CPU-Killer-1.0.14.zip" length="3657600" type="application/octet-stream" sparkle:edSignature="s1ByqcuVwa1vdSI/nlxo15P4q0UJi+vr+2TEy2mUmAGKeH7unQq7ForqLLu2f0BGYEI7HEofKppqaTjvZsdjAQ=="/>
-        </item>
-        <item>
-            <title>1.0.11</title>
-            <pubDate>Sat, 05 Sep 2026 16:29:59 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>22</sparkle:version>
-            <sparkle:shortVersionString>1.0.11</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.11/CPU-Killer-1.0.11.zip" length="3630774" type="application/octet-stream" sparkle:edSignature="+HwUqI4sFnMXT5Gr7lgGxYEGioJTqQxSAGaMATaofv6yYn0GHkLfNs5nCKVVCek1QC8YPVank2sY2CXuNL5UBA=="/>
-        </item>
-        <item>
-            <title>1.0.9</title>
-            <pubDate>Fri, 04 Sep 2026 23:53:43 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>20</sparkle:version>
-            <sparkle:shortVersionString>1.0.9</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.9/CPU-Killer-1.0.9.zip" length="3648755" type="application/octet-stream" sparkle:edSignature="7d7LtrCIJBaHMCRWNqchqxcN6fyVo/WBxoJJTWoQLRvqa2IwcKH8sNJMdPz/SgwPhRG4XCn8FAGIClfplBFICw=="/>
-        </item>
-        <item>
-            <title>1.0.6</title>
-            <pubDate>Fri, 04 Sep 2026 22:36:44 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>17</sparkle:version>
-            <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.6/CPU-Killer-1.0.6.zip" length="3650540" type="application/octet-stream" sparkle:edSignature="FgBWIppabePyKP8kpcZiJQI7Kz1OcTemwwmoVk05NbxSdYl3XGzVlz1es4n2cef8V+RqZ6ILbz9sfFjrojuRBQ=="/>
-        </item>
-        <item>
-            <title>1.0.5</title>
-            <pubDate>Fri, 04 Sep 2026 22:29:55 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>16</sparkle:version>
-            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.5/CPU-Killer-1.0.5.zip" length="3650022" type="application/octet-stream" sparkle:edSignature="jwrWftw5M0/fYUewtJH814CR6Gqho5Vfib7jdvc2f1O+h8tRotfA9d6fPuioGFKejO2l07LMRAjNSyBVzUntBw=="/>
-        </item>
-        <item>
-            <title>1.0.4</title>
-            <pubDate>Fri, 04 Sep 2026 22:25:27 +0800</pubDate>
-            <link>https://github.com/x0c/CPUKiller</link>
-            <sparkle:version>15</sparkle:version>
-            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/CPUKiller/releases/download/v1.0.4/CPU-Killer-1.0.4.zip" length="3646605" type="application/octet-stream" sparkle:edSignature="qOK8JNZ1+msGiy0EUR4qipgZMv6Gx5wr0d7XUC99FpCrUhp79eol1jbR3plFn8V7PVSNhrMUCta7ysxALQLXBg=="/>
+            <enclosure url="https://github.com/x0c/MacResourceMonitor/releases/download/v1.1.0/Mac-Resource-Monitor-1.1.0.zip" length="3678906" type="application/octet-stream" sparkle:edSignature="kmOQzsphlENE91HpYnwZqP91UcRrzHLGFPzBTW9voJfa9/M5+CgqOs6dqNvXeJdPU/wi3NW4FgwhhHKL9MIpCg=="></enclosure>
         </item>
     </channel>
-</rss>
-<!-- sparkle-signatures:
-edSignature: URR4Gml3GjlDGBDgutLCDdNwD7V/8unu5zS48fpw7mJ0P6NOP+oBS68xd623C6lpeHMU9VgybFCgNik+/5AICQ==
-length: 7038
+</rss><!-- sparkle-signatures:
+edSignature: y1oXxAFK0+z4X3n6tu27ALaAzEOvRPPHKpEeKFKBcra4SXHOYRA7CQcoUM60LEGMdQZ8Xumqrm8tYf9Bal59DQ==
+length: 1138
 -->

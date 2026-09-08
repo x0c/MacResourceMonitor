@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CPU Killer macOS 一条命令发版：
+# Mac Resource Monitor macOS 一条命令发版：
 #   Release 构建 -> 重签 Sparkle 内嵌件 -> Developer ID 签名自检 -> 苹果公证 -> 装订票据
 #   -> 生成 Sparkle 签名更新包与 appcast -> 打 dmg -> 公证 dmg -> 装订
 #   -> 提交 / 打 tag / 推送私有 origin
@@ -23,13 +23,13 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly ROOT_DIR
-readonly SCHEME="CPUKiller"
-readonly APP_BUNDLE="CPU Killer"
-readonly ASSET_STEM="CPU-Killer"
-readonly REPO="x0c/CPUKiller"
+readonly SCHEME="MacResourceMonitor"
+readonly APP_BUNDLE="Mac Resource Monitor"
+readonly ASSET_STEM="Mac-Resource-Monitor"
+readonly REPO="x0c/MacResourceMonitor"
 readonly REPO_WEB="https://github.com/${REPO}"
 readonly FEED_URL="https://raw.githubusercontent.com/${REPO}/main/appcast.xml"
-readonly CASK_NAME="cpu-killer"
+readonly CASK_NAME="mac-resource-monitor"
 readonly TAP_REPO="x0c/homebrew-tap"
 local_env="${ROOT_DIR}/scripts/publish-local.env"
 [[ -f "${local_env}" ]] && source "${local_env}"
@@ -212,7 +212,7 @@ codesign --force --options runtime --timestamp \
 codesign --force --options runtime --timestamp \
   --sign "${SIGN_IDENTITY}" "${APP_PATH}" \
   || die "重签 ${APP_BUNDLE}.app 失败"
-sparkle_public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' CPUKiller/Info.plist 2>/dev/null || true)"
+sparkle_public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' MacResourceMonitor/Info.plist 2>/dev/null || true)"
 [[ -n "${sparkle_public_key}" ]] || die "Info.plist 缺少 Sparkle 更新公钥"
 [[ "$("${sparkle_bin_dir}/generate_keys" --account "${SPARKLE_ACCOUNT}" -p 2>/dev/null)" == "${sparkle_public_key}" ]] \
   || die "钥匙串里的 Sparkle 更新签名密钥缺失或与应用公钥不匹配"
@@ -253,7 +253,7 @@ xcrun stapler staple "${APP_PATH}" || die "装订票据失败"
 log_step "生成 Sparkle 签名更新包与 appcast"
 release_notes_file="${work_dir}/release-notes.md"
 cat > "${release_notes_file}" <<EOF
-CPU Killer ${version}
+Mac Resource Monitor ${version}
 
 - Click the menu-bar rings for the CPU and memory list, or click upload/download for the matching network-activity list.
 - Network activity refreshes every second, stays in step with the menu-bar readings, and never opens to a blank panel.
@@ -390,7 +390,7 @@ cask "${CASK_NAME}" do
 
   url "https://github.com/${REPO}/releases/download/v#{version}/${ASSET_STEM}-#{version}.dmg"
   name "${APP_BUNDLE}"
-  desc "Menu bar process table: see who is using the CPU, then end it"
+  desc "Menu bar resource table: see CPU, memory, and network use, then end apps"
   homepage "${REPO_WEB}"
 
   depends_on macos: :tahoe
@@ -398,7 +398,7 @@ cask "${CASK_NAME}" do
   app "${APP_BUNDLE}.app"
 
   zap trash: [
-    "~/Library/Preferences/top.caozc.CPUKiller.plist",
+    "~/Library/Preferences/top.caozc.MacResourceMonitor.plist",
   ]
 end
 EOF
@@ -406,7 +406,7 @@ git -C "${tap_dir}" add "Casks/${CASK_NAME}.rb"
 if git -C "${tap_dir}" diff --cached --quiet; then
   echo "Homebrew 配方已是 ${version}，无需更新"
 else
-  git -C "${tap_dir}" -c core.hooksPath=/dev/null commit -m "cpu-killer ${version}"
+  git -C "${tap_dir}" -c core.hooksPath=/dev/null commit -m "mac-resource-monitor ${version}"
   git -C "${tap_dir}" push origin HEAD
 fi
 

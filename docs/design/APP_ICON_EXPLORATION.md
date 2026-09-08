@@ -1,4 +1,4 @@
-# CPU Killer 应用图标探索
+# Mac Resource Monitor 应用图标探索
 
 覆盖：重新设计 / 精绘 / 接入应用图标，或排查进程表 / Finder 仍显示旧图标（粉底黑叉）。不覆盖：菜单栏双环模板绘制（见菜单栏交互知识库）。
 
@@ -10,7 +10,7 @@
 
 ## 设计基线
 
-- 产品名 **CPU Killer**；主符号一个，无文字 / 标签 / 设备框 / 预裁圆角 / 外投影。
+- 产品名 **Mac Resource Monitor**；主符号一个，无文字 / 标签 / 设备框 / 预裁圆角 / 外投影。
 - 方形、不透明、满画布；缩小到 48px / 24px 仍保留明确轮廓。
 - App icon ≠ 菜单栏双环模板。
 - 不做高饱和海报或被动监视器图表。
@@ -31,7 +31,7 @@
 ## 资产路径
 
 - 正式主图：`design/app-icon/AppIcon-1024.png`
-- 分层图层：`CPUKiller/AppIcon.icon/Assets/chip-pressed-white.png`
+- 分层图层：`MacResourceMonitor/AppIcon.icon/Assets/chip-pressed-white.png`
 - 探索稿目录：`design/app-icon/explorations/`（历史九宫格，勿当终稿）
 - 裁格工具：`apple-app-icon-pack` → `extract_direction_cell.py`
 

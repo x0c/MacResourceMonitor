@@ -18,9 +18,9 @@
 
 ## §1 业务背景与核心概念
 
-“安装、更新与公开发布”负责把 CPU Killer 从工程源转换为可由普通 macOS 用户安全安装、自动更新和一键安装的公开产品。它不包含日常进程采样、排序或结束逻辑；它的职责是保证这些能力进入正确签名、可被 Gatekeeper 接受、且能被后续版本替换的应用包。
+“安装、更新与公开发布”负责把 Mac Resource Monitor 从工程源转换为可由普通 macOS 用户安全安装、自动更新和一键安装的公开产品。它不包含日常进程采样、排序或结束逻辑；它的职责是保证这些能力进入正确签名、可被 Gatekeeper 接受、且能被后续版本替换的应用包。
 
-产品只支持 macOS，公开源码仓是 GitHub `x0c/CPUKiller`，许可证为 MIT。首次安装有两条用户路径：从 GitHub Release 下载签名并公证的 DMG，或通过 Homebrew 的 `x0c/tap` 安装 `cpu-killer` cask。已经安装的应用由 Sparkle 从仓库根的 `appcast.xml` 自动检查更新，也可以从右键菜单或设置窗口主动选择“检查更新…”。
+产品只支持 macOS，公开源码仓是 GitHub `x0c/MacResourceMonitor`，许可证为 MIT。首次安装有两条用户路径：从 GitHub Release 下载签名并公证的 DMG，或通过 Homebrew 的 `x0c/tap` 安装 `mac-resource-monitor` cask。已经安装的应用由 Sparkle 从仓库根的 `appcast.xml` 自动检查更新，也可以从右键菜单或设置窗口主动选择“检查更新…”。
 
 本域的主称谓固定为“安装、更新与公开发布”。其中“公开发布”不是仅推送源码或仅创建标签：它至少连通 Release 应用、Developer ID 签名、公证与票据、Sparkle 更新 ZIP 与已签名更新清单、GitHub Release、Homebrew cask，以及匿名下载检查。
 
@@ -31,7 +31,7 @@
 ```mermaid
 flowchart TD
     A[project.yml 与 Configuration/Base.xcconfig] --> B[xcodegen generate]
-    B --> C[Release 构建：CPU Killer.app]
+    B --> C[Release 构建：Mac Resource Monitor.app]
     C --> D[Developer ID 重签 Sparkle 内嵌组件]
     D --> E[签名与权限检查]
     E --> F[苹果公证并装订应用票据]
@@ -48,14 +48,14 @@ flowchart TD
     N --> G
 ```
 
-图中 `project.yml` 是 Xcode 工程唯一来源；生成的 `CPUKiller.xcodeproj` 只是派生产物。`Info.plist` 声明 Sparkle 的更新清单地址、更新公钥、自动检查和自动安装要求。`AppUpdater` 在进程生命周期中持有 Sparkle 控制器，`AppDelegate` 将主动检查入口接入应用，并把 Sparkle 的安装会话状态交给终止守卫。
+图中 `project.yml` 是 Xcode 工程唯一来源；生成的 `MacResourceMonitor.xcodeproj` 只是派生产物。`Info.plist` 声明 Sparkle 的更新清单地址、更新公钥、自动检查和自动安装要求。`AppUpdater` 在进程生命周期中持有 Sparkle 控制器，`AppDelegate` 将主动检查入口接入应用，并把 Sparkle 的安装会话状态交给终止守卫。
 
 ## §2 核心业务流程
 
 ### 首次安装链路
 
-1. 用户从 GitHub Release 取得对应版本的 `CPU-Killer-x.y.z.dmg`，或通过 Homebrew 安装同一 Release 指向的 DMG。
-2. DMG 内放置完整的 `CPU Killer.app` 与 `/Applications` 快捷方式；用户将应用放入“应用程序”。
+1. 用户从 GitHub Release 取得对应版本的 `Mac-Resource-Monitor-x.y.z.dmg`，或通过 Homebrew 安装同一 Release 指向的 DMG。
+2. DMG 内放置完整的 `Mac Resource Monitor.app` 与 `/Applications` 快捷方式；用户将应用放入“应用程序”。
 3. 应用和 DMG 都必须经过 Developer ID 签名、公证并装订票据；首次打开的 Gatekeeper 检查必须接受应用。
 4. 用户可从应用内的菜单栏入口发起更新检查；不需要账号、服务端配置或手动下载更新清单。
 
@@ -88,14 +88,14 @@ flowchart TD
 
 | 目录或文件（相对项目根） | 内容 | 关键类或文件 |
 |---|---|---|
-| `project.yml` | XcodeGen 工程定义、Swift Package、Release 签名和版本配置 | `CPUKiller` target、Sparkle 依赖 |
+| `project.yml` | XcodeGen 工程定义、Swift Package、Release 签名和版本配置 | `MacResourceMonitor` target、Sparkle 依赖 |
 | `Configuration/Base.xcconfig` | Bundle 标识、团队、营销版本和内部构建号 | 版本双轨的一侧 |
 | `Configuration/Release.xcconfig` | Release 构建覆盖设置 | Release 配置文件 |
-| `CPUKiller/Info.plist` | Sparkle 更新地址、更新公钥与自动更新要求 | `SUFeedURL` 等键 |
-| `CPUKiller/App/AppUpdater.swift` | Sparkle 控制器的生命周期与主动检查入口 | `AppUpdater` |
-| `CPUKiller/AppDelegate.swift` | 更新入口与更新期间终止放行的接线 | `AppDelegate.checkForUpdates()` |
-| `CPUKiller/StatusItem/StatusItemController.swift` | 右键菜单“检查更新…”动作的转发 | `StatusItemController.checkForUpdates(_:)` |
-| `CPUKiller/Views/SettingsView.swift` | 设置窗口里的“检查更新…”按钮 | `SettingsView` |
+| `MacResourceMonitor/Info.plist` | Sparkle 更新地址、更新公钥与自动更新要求 | `SUFeedURL` 等键 |
+| `MacResourceMonitor/App/AppUpdater.swift` | Sparkle 控制器的生命周期与主动检查入口 | `AppUpdater` |
+| `MacResourceMonitor/AppDelegate.swift` | 更新入口与更新期间终止放行的接线 | `AppDelegate.checkForUpdates()` |
+| `MacResourceMonitor/StatusItem/StatusItemController.swift` | 右键菜单“检查更新…”动作的转发 | `StatusItemController.checkForUpdates(_:)` |
+| `MacResourceMonitor/Views/SettingsView.swift` | 设置窗口里的“检查更新…”按钮 | `SettingsView` |
 | `scripts/publish-release.sh` | 本地构建、签名、公证、发布与匿名终检 | `notarize_and_wait()`、`push_github_snapshot()` |
 | `scripts/publish-local.env.example` | 未入库的发行凭据配置模板 | 本地发行配置样例 |
 | `appcast.xml` | Sparkle 公开更新清单 | 更新版本条目 |
@@ -112,11 +112,11 @@ flowchart TD
 |---|---|---|---|
 | 改工程结构、Swift Package、签名或 Release 构建设置 | `project.yml` | `settings.configs.Release`、`packages.Sparkle` | 这是唯一工程来源；改后必须生成工程，不手改派生工程。 |
 | 改公开版本或内部构建号 | `Configuration/Base.xcconfig` 与 `project.yml` | `MARKETING_VERSION`、`CURRENT_PROJECT_VERSION` | 两处必须同步；脚本会在构建前中止不一致发布。 |
-| 改自动检查、更新清单地址或更新验证要求 | `CPUKiller/Info.plist` | `SUFeedURL`、`SUPublicEDKey`、`SUEnableAutomaticChecks`、`SUAutomaticallyUpdate`、`SURequireSignedFeed`、`SUVerifyUpdateBeforeExtraction` | 这些键决定已安装应用从哪里取清单及其安全边界。 |
-| 改 Sparkle 生命周期或主动检查行为 | `CPUKiller/App/AppUpdater.swift` | `AppUpdater.init()`、`AppUpdater.checkForUpdates(_:)` | 必须长期持有控制器，菜单入口只委托 Sparkle，不重写其安装流程。 |
-| 改更新期间的退出策略或检查入口接线 | `CPUKiller/AppDelegate.swift` | `applicationDidFinishLaunching(_:)`、`applicationShouldTerminate(_:)`、`checkForUpdates()` | 将更新会话状态交给终止守卫，并把用户操作转给 `AppUpdater`。 |
-| 改右键入口文字或事件转发 | `CPUKiller/StatusItem/StatusItemController.swift` | `StatusItemController.checkForUpdates(_:)` | 用户可见入口属于菜单栏域；此处只确认它最终转发到更新动作。 |
-| 改设置窗口的检查入口 | `CPUKiller/Views/SettingsView.swift` | 更新按钮动作 | 同样调用 `AppDelegate.checkForUpdates()`。 |
+| 改自动检查、更新清单地址或更新验证要求 | `MacResourceMonitor/Info.plist` | `SUFeedURL`、`SUPublicEDKey`、`SUEnableAutomaticChecks`、`SUAutomaticallyUpdate`、`SURequireSignedFeed`、`SUVerifyUpdateBeforeExtraction` | 这些键决定已安装应用从哪里取清单及其安全边界。 |
+| 改 Sparkle 生命周期或主动检查行为 | `MacResourceMonitor/App/AppUpdater.swift` | `AppUpdater.init()`、`AppUpdater.checkForUpdates(_:)` | 必须长期持有控制器，菜单入口只委托 Sparkle，不重写其安装流程。 |
+| 改更新期间的退出策略或检查入口接线 | `MacResourceMonitor/AppDelegate.swift` | `applicationDidFinishLaunching(_:)`、`applicationShouldTerminate(_:)`、`checkForUpdates()` | 将更新会话状态交给终止守卫，并把用户操作转给 `AppUpdater`。 |
+| 改右键入口文字或事件转发 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.checkForUpdates(_:)` | 用户可见入口属于菜单栏域；此处只确认它最终转发到更新动作。 |
+| 改设置窗口的检查入口 | `MacResourceMonitor/Views/SettingsView.swift` | 更新按钮动作 | 同样调用 `AppDelegate.checkForUpdates()`。 |
 | 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。 |
 | 改公开更新内容 | `appcast.xml` | Sparkle item 与签名尾部 | 必须由 Sparkle 工具生成和验证，不能手改后直接发布。 |
 | 改用户安装路径或安装说明 | `README.md`、`README.zh-CN.md` | Install / 安装段 | 英文说明为权威安装结构，中文说明保持同等渠道与边界。 |
@@ -127,7 +127,7 @@ flowchart TD
 
 | 表或字段 | Entity/Mapper | 业务语义 | 改动注意 |
 |---|---|---|---|
-| 不适用 | 不适用 | CPU Killer 是纯本地 macOS 工具；安装、更新与公开发布不依赖业务数据库 | 不为版本、Release 或更新清单新建服务端表。 |
+| 不适用 | 不适用 | Mac Resource Monitor 是纯本地 macOS 工具；安装、更新与公开发布不依赖业务数据库 | 不为版本、Release 或更新清单新建服务端表。 |
 
 ## §5 流程、组件、任务与消息入口索引
 
@@ -140,19 +140,19 @@ flowchart TD
 | 文件型更新产物 | Sparkle 更新清单 | `appcast.xml` | 已安装应用发现、验证并下载更新时。 |
 | 文件型安装产物 | DMG | GitHub Release 附件 | 第一次直接安装时。 |
 | 文件型更新产物 | 更新 ZIP | GitHub Release 附件 | Sparkle 下载与安装更新时。 |
-| 外部配方仓 | Homebrew cask | `x0c/homebrew-tap` 的 `Casks/cpu-killer.rb` | 用户通过 Homebrew 一键安装或升级时。 |
+| 外部配方仓 | Homebrew cask | `x0c/homebrew-tap` 的 `Casks/mac-resource-monitor.rb` | 用户通过 Homebrew 一键安装或升级时。 |
 
 ## §6 核心业务规则与隐性约束
 
 **跨产品权威**：Developer ID / 加固运行时 / Sparkle 内嵌重签 / 版本双轨 / 空 Release 再传附件 / 并发发版互斥 / raw CDN 终检滞后 / `--local-only` → `~/Codes/_standards/workspace-docs/swift-docs/macos-signing-notarization-distribution.md`；开源门面与 Homebrew → `~/.config/agentsync/docs/OPEN_SOURCE_GITHUB_GUIDE.md`；商店 vs 官网公证分工 → `~/.config/agentsync/docs/APP_STORE_CHINA_LISTING_GUIDE.md` §3.1。本节约本仓接线。
 
-- 【必须】Xcode 工程只改 `project.yml`，改后 XcodeGen 重生（`CPUKiller.xcodeproj` 是派生产物）。
+- 【必须】Xcode 工程只改 `project.yml`，改后 XcodeGen 重生（`MacResourceMonitor.xcodeproj` 是派生产物）。
 - **AI 易错点** 营销版本与内部构建号须同步改 `Configuration/Base.xcconfig` 与 `project.yml`（脚本会拦不一致）。
 - **AI 易错点** 禁止用 Debug / ad-hoc 覆盖 `/Applications` 里的 Developer ID 包；覆盖安装先删再整包 `ditto`（见 swift 基线）。
 - 【接线】`AppUpdater` 长期持有 Sparkle 控制器；`AppDelegate` 把 `sessionInProgress` 交给 `TerminationGuard`；右键/设置「检查更新…」只转发，不重写安装流程。
 - 【禁止】手改已签名 `appcast.xml`；必须用本仓 `scripts/publish-release.sh` 调用的 Sparkle 工具生成并校验。
-- 【必须】公开快照走 `push_github_snapshot()`，禁止把私有 origin 历史/内网地址推到 `x0c/CPUKiller`；发布前按公开仓规则做泄漏扫描。
-- 【必须】公开 appcast 与 Homebrew cask `x0c/tap` 的 `cpu-killer` 不得回退版本（脚本已检）。
+- 【必须】公开快照走 `push_github_snapshot()`，禁止把私有 origin 历史/内网地址推到 `x0c/MacResourceMonitor`；发布前按公开仓规则做泄漏扫描。
+- 【必须】公开 appcast 与 Homebrew cask `x0c/tap` 的 `mac-resource-monitor` 不得回退版本（脚本已检）。
 - 【禁止】为更新/安装新增账号、遥测、服务端任务、Mac App Store、沙盒、辅助功能或完整磁盘访问。
 - 【叫法】“安装、更新与公开发布”覆盖 DMG、Sparkle、GitHub Release 和 Homebrew；`AppUpdater` / `appcast.xml` / `publish-release.sh` / cask 是入口名，不是四个独立业务域。
 
@@ -163,10 +163,10 @@ flowchart TD
 1. 改工程设置、依赖或版本后，先重新生成工程并做 Release 构建：
 
    ```bash
-   xcodegen generate && xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -configuration Release -destination 'platform=macOS' -derivedDataPath build/DerivedData build
+   xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release -destination 'platform=macOS' -derivedDataPath build/DerivedData build
    ```
 
-   检查构建结束并产出 `build/DerivedData/Build/Products/Release/CPU Killer.app`。此命令不等于完成 Developer ID 签名或公证。
+   检查构建结束并产出 `build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`。此命令不等于完成 Developer ID 签名或公证。
 
 2. 改版本后，先核对双轨版本是否一致，避免把不一致留到长时间构建之后才失败：
 
@@ -179,7 +179,7 @@ flowchart TD
 3. 对已有 Release 应用验证签名主体、加固运行时和 Gatekeeper 接受状态：
 
    ```bash
-   app_path='build/DerivedData/Build/Products/Release/CPU Killer.app'; codesign -dv --verbose=2 "$app_path" 2>&1; spctl -a -vvv -t install "$app_path"
+   app_path='build/DerivedData/Build/Products/Release/Mac Resource Monitor.app'; codesign -dv --verbose=2 "$app_path" 2>&1; spctl -a -vvv -t install "$app_path"
    ```
 
    检查输出含 Developer ID 签发者、runtime 标志与 `accepted`。若该产物不是本次完整发行产物，不能据此推断 DMG 已公证。
@@ -187,7 +187,7 @@ flowchart TD
 4. 对已有 DMG 验证装订票据：
 
    ```bash
-   xcrun stapler validate 'build/CPU-Killer-<版本>.dmg'
+   xcrun stapler validate 'build/Mac-Resource-Monitor-<版本>.dmg'
    ```
 
    将 `<版本>` 替换为实际营销版本。成功只说明指定本地 DMG 的票据可验证，不证明 GitHub 已上传。
@@ -203,7 +203,7 @@ flowchart TD
 6. 覆盖安装必须使用完整 Release 包，先移除旧包再复制并启动：
 
    ```bash
-   rm -rf '/Applications/CPU Killer.app' && ditto 'build/DerivedData/Build/Products/Release/CPU Killer.app' '/Applications/CPU Killer.app' && open '/Applications/CPU Killer.app'
+   rm -rf '/Applications/Mac Resource Monitor.app' && ditto 'build/DerivedData/Build/Products/Release/Mac Resource Monitor.app' '/Applications/Mac Resource Monitor.app' && open '/Applications/Mac Resource Monitor.app'
    ```
 
    仅在确认目标目录可无交互写入时执行；若系统要求管理员授权，停止而不要弹出图形授权。启动后需从菜单栏确认实际运行版本和“检查更新…”入口可用。

@@ -18,7 +18,7 @@
 
 ## §1 业务背景与核心概念
 
-**菜单栏操作与恢复**是 CPU Killer 的唯一日常入口。它让用户在菜单栏中持续看到整机占用概览，需要结束进程时才左键展开短暂的进程表；需要改变应用行为时，才通过右键菜单或「打开主窗口」出示的设置窗操作。图标即主入口，**禁止隐藏菜单栏图标**。它不是第二个桌面工作区，也不是始终悬挂在状态项上的系统菜单。
+**菜单栏操作与恢复**是 Mac Resource Monitor 的唯一日常入口。它让用户在菜单栏中持续看到整机占用概览，需要结束进程时才左键展开短暂的进程表；需要改变应用行为时，才通过右键菜单或「打开主窗口」出示的设置窗操作。图标即主入口，**禁止隐藏菜单栏图标**。它不是第二个桌面工作区，也不是始终悬挂在状态项上的系统菜单。
 
 本领域只负责把进程监控域提供的整机 CPU、整机物理内存和面板可见性消费为菜单栏体验；不决定进程怎样识别、怎样采样、哪些进程可结束，也不定义签名、公证或 Release 产物。检查更新只在这里提供入口和更新会话期间的退出边界，更新传输与发布细节属于发布域。
 
@@ -122,7 +122,7 @@ graph TD
 |---|---|---|---|---|
 | 菜单栏图标 | 始终显示 | 启动强制可见；无显隐偏好 | 可左键打开表 | 禁止隐藏；登录静默不弹设置窗 |
 | 进程表浮层 | 显示 / 收起 | `CompactPanel.show()`、`CompactPanel.hidePanel()` | 显示时用户可结束进程；收起时点外关闭已完成 | 收起不等于菜单栏双环、表头或网速停止刷新 |
-| 列表刷新 | 开 / 冻结 | 进程监控域的刷新偏好 | 冻结名单以便安全点击结束 | 冻结不等于冻结整机指标、双环或网速采样 |
+| 列表冻结 | 关 / 开（Freeze） | 进程监控域的冻结偏好 | 稳住顺序与成员以便对准结束；数字仍刷新；点列头排序会自动关 | 冻结不等于冻读数，也不等于冻整机指标、双环或网速采样 |
 | 网速读数 | 显示 / 隐藏 | `MenuBarDisplayPreferences.showsNetworkSpeed` | 隐藏时节省菜单栏宽度 | 隐藏不等于取消默认路由监控或重置双环 |
 | 网速样本 | 无样本 / 有样本 | `NetworkSpeedMonitor.setDefaultInterface()`、`NetworkSpeedMonitor.sample()` | 无样本显示破折号，下一次有效采样恢复数字 | 接口变化后的无样本不是零流量，也不能沿用旧读数 |
 | 开机自启 | 关 / 开 / 待批准 | `LaunchAtLoginManager.setEnabled()` 与系统登录项 | 待批准时给出系统设置入口 | 待批准不是开；菜单勾选不能显示为普通已开启 |
@@ -147,33 +147,33 @@ graph TD
 
 | 目录（相对项目根） | 内容 | 关键类或文件 |
 |---|---|---|
-| `CPUKiller/` | 应用生命周期、对象组装、唤回和退出决策 | `AppDelegate.swift` |
-| `CPUKiller/StatusItem/` | 状态项、动态双环和网速绘制、浮层、锚定、点外关闭 | `StatusItemController.swift`、`CompactPanel.swift`、`PanelPlacement.swift`、`PanelDismiss.swift`、`MenuBarIconRenderer.swift` |
-| `CPUKiller/App/` | 显示偏好、设置窗、开机自启的应用层入口 | `AppPreferences.swift`、`SettingsWindowController.swift`、`LaunchAtLoginManager.swift` |
-| `CPUKiller/Views/` | 恢复窗口与两张平表、无蓝框焦点呈现 | `SettingsView.swift`、`ProcessTableView.swift`、`NetworkTableView.swift` |
-| `CPUKiller/Services/` | 默认出口网卡、总网速与按进程网络速率采样 | `NetworkSpeedMonitor.swift`、`ProcessNetworkSampler.swift`、`NetworkListModel.swift` |
-| `CPUKillerTests/` | 锚定、点外关闭、网速格式、入口命中和网络表排序的自动回归 | `PanelPlacementTests.swift`、`NetworkSpeedMonitorTests.swift`、`NetworkTableTests.swift`、`DisplayClassifierTests.swift` |
+| `MacResourceMonitor/` | 应用生命周期、对象组装、唤回和退出决策 | `AppDelegate.swift` |
+| `MacResourceMonitor/StatusItem/` | 状态项、动态双环和网速绘制、浮层、锚定、点外关闭 | `StatusItemController.swift`、`CompactPanel.swift`、`PanelPlacement.swift`、`PanelDismiss.swift`、`MenuBarIconRenderer.swift` |
+| `MacResourceMonitor/App/` | 显示偏好、设置窗、开机自启的应用层入口 | `AppPreferences.swift`、`SettingsWindowController.swift`、`LaunchAtLoginManager.swift` |
+| `MacResourceMonitor/Views/` | 恢复窗口与两张平表、无蓝框焦点呈现 | `SettingsView.swift`、`ProcessTableView.swift`、`NetworkTableView.swift` |
+| `MacResourceMonitor/Services/` | 默认出口网卡、总网速与按进程网络速率采样 | `NetworkSpeedMonitor.swift`、`ProcessNetworkSampler.swift`、`NetworkListModel.swift` |
+| `MacResourceMonitorTests/` | 锚定、点外关闭、网速格式、入口命中和网络表排序的自动回归 | `PanelPlacementTests.swift`、`NetworkSpeedMonitorTests.swift`、`NetworkTableTests.swift`、`DisplayClassifierTests.swift` |
 | `Configuration/` | 构建与运行环境配置；不是本领域的业务偏好来源 | 配置文件 |
 
 ## §3 本域代码入口索引
 
 | 场景 | 入口 | 类/方法/配置 | 说明 |
 |---|---|---|---|
-| 组装菜单栏操作与恢复 | `CPUKiller/AppDelegate.swift` | `AppDelegate.applicationDidFinishLaunching()` | 建立状态项、进程表、网速观察、恢复策略和退出守卫的连接 |
-| 左键开关两张表 | `CPUKiller/AppDelegate.swift` | `AppDelegate.toggleCompactPanel(for:)` → `AppDelegate.showPanelBelowStatusItem(content:attempt:)` | 按所点双环或上/下行读数打开对应平表 |
-| 处理状态项点击 | `CPUKiller/StatusItem/StatusItemController.swift` | 两个独立状态项的系统按钮 | 圆环项直开 CPU/内存，网速项直开网络表，右键或 Control 点击才临时显示菜单 |
-| 菜单即时状态 | `CPUKiller/StatusItem/StatusItemController.swift` | `StatusItemController.configureMenu()`、`StatusItemController.menuNeedsUpdate()` | 菜单项目、开机自启三态、待批准入口和网速勾选状态 |
-| 动态双环与网速重绘 | `CPUKiller/StatusItem/StatusItemController.swift` | `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、`StatusItemController.renderStatusItem()` | 把两种异步输入统一为状态项图片重绘 |
-| 双环与两行排版 | `CPUKiller/StatusItem/MenuBarIconRenderer.swift` | `MenuBarIconRenderer.image()`、`MenuBarIconRenderer.drawNetworkSpeed()`、`MenuBarIconRenderer.edgeAnchoredBaselines()` | 在固定菜单栏高度内画同心双环、上行和下行读数 |
-| 两张表显示、切换与关闭 | `CPUKiller/StatusItem/CompactPanel.swift` | `CompactPanel.show(anchor:content:)`、`CompactPanel.switchContent(to:)`、`CompactPanel.hidePanel()` | 无标题栏、非激活浮层；切换时先停止旧表再启动新表，点外关闭两者 |
-| 锚定与边界回退 | `CPUKiller/StatusItem/PanelPlacement.swift` | `PanelPlacement.isMenuBarAnchor()`、`PanelPlacement.origin()` | 识别顶部或底部菜单栏，按可见屏幕夹紧面板；无效锚点走安全回退 |
-| 点外关闭判定 | `CPUKiller/StatusItem/PanelDismiss.swift` | `PanelDismiss.shouldHide()` | 面板与状态项框都在保留区域，其他点击才关闭 |
-| 网速显示偏好 | `CPUKiller/App/AppPreferences.swift` | `MenuBarDisplayPreferences.showsNetworkSpeed` | 默认显示并持久化；只供绘制读取，不能另存一份菜单状态 |
-| 显示恢复窗口 | `CPUKiller/App/SettingsWindowController.swift` | `SettingsWindowController.show()` | 创建带标题栏、保存位置的恢复窗口，并建立菜单栏应用的窗口激活会话 |
-| 恢复窗口行为 | `CPUKiller/Views/SettingsView.swift` | `SettingsView.body`、`SettingsView.launchBinding`、`SettingsView.iconBinding` | 提供运行状态、开机自启、系统登录项跳转、图标显示和检查更新；使用自有焦点样式 |
-| 开机自启三态 | `CPUKiller/App/LaunchAtLoginManager.swift` | `LaunchAtLoginManager.isEnabled`、`LaunchAtLoginManager.requiresApproval`、`LaunchAtLoginManager.setEnabled()` | 把系统服务状态转成用户可见的开、关、待批准，并处理失败提示 |
-| 再次打开 | `CPUKiller/AppDelegate.swift` | `AppDelegate.applicationShouldHandleReopen()` | 图标始终可见时不自动弹窗；登录静默由 `isLoginLaunch` 保证 |
-| 更新检查与退出申请 | `CPUKiller/AppDelegate.swift` | `AppDelegate.checkForUpdates()`、`AppDelegate.requestTermination()`、`AppDelegate.applicationShouldTerminate()` | 检查更新只走应用内更新；退出是否放行取决于更新安装会话 |
+| 组装菜单栏操作与恢复 | `MacResourceMonitor/AppDelegate.swift` | `AppDelegate.applicationDidFinishLaunching()` | 建立状态项、进程表、网速观察、恢复策略和退出守卫的连接 |
+| 左键开关两张表 | `MacResourceMonitor/AppDelegate.swift` | `AppDelegate.toggleCompactPanel(for:)` → `AppDelegate.showPanelBelowStatusItem(content:attempt:)` | 按所点双环或上/下行读数打开对应平表 |
+| 处理状态项点击 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | 两个独立状态项的系统按钮 | 圆环项直开 CPU/内存，网速项直开网络表，右键或 Control 点击才临时显示菜单 |
+| 菜单即时状态 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.configureMenu()`、`StatusItemController.menuNeedsUpdate()` | 菜单项目、开机自启三态、待批准入口和网速勾选状态 |
+| 动态双环与网速重绘 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、`StatusItemController.renderStatusItem()` | 把两种异步输入统一为状态项图片重绘 |
+| 双环与两行排版 | `MacResourceMonitor/StatusItem/MenuBarIconRenderer.swift` | `MenuBarIconRenderer.image()`、`MenuBarIconRenderer.drawNetworkSpeed()`、`MenuBarIconRenderer.edgeAnchoredBaselines()` | 在固定菜单栏高度内画同心双环、上行和下行读数 |
+| 两张表显示、切换与关闭 | `MacResourceMonitor/StatusItem/CompactPanel.swift` | `CompactPanel.show(anchor:content:)`、`CompactPanel.switchContent(to:)`、`CompactPanel.hidePanel()` | 无标题栏、非激活浮层；切换时先停止旧表再启动新表，点外关闭两者 |
+| 锚定与边界回退 | `MacResourceMonitor/StatusItem/PanelPlacement.swift` | `PanelPlacement.isMenuBarAnchor()`、`PanelPlacement.origin()` | 识别顶部或底部菜单栏，按可见屏幕夹紧面板；无效锚点走安全回退 |
+| 点外关闭判定 | `MacResourceMonitor/StatusItem/PanelDismiss.swift` | `PanelDismiss.shouldHide()` | 面板与状态项框都在保留区域，其他点击才关闭 |
+| 网速显示偏好 | `MacResourceMonitor/App/AppPreferences.swift` | `MenuBarDisplayPreferences.showsNetworkSpeed` | 默认显示并持久化；只供绘制读取，不能另存一份菜单状态 |
+| 显示恢复窗口 | `MacResourceMonitor/App/SettingsWindowController.swift` | `SettingsWindowController.show()` | 创建带标题栏、保存位置的恢复窗口，并建立菜单栏应用的窗口激活会话 |
+| 恢复窗口行为 | `MacResourceMonitor/Views/SettingsView.swift` | `SettingsView.body`、`SettingsView.launchBinding`、`SettingsView.iconBinding` | 提供运行状态、开机自启、系统登录项跳转、图标显示和检查更新；使用自有焦点样式 |
+| 开机自启三态 | `MacResourceMonitor/App/LaunchAtLoginManager.swift` | `LaunchAtLoginManager.isEnabled`、`LaunchAtLoginManager.requiresApproval`、`LaunchAtLoginManager.setEnabled()` | 把系统服务状态转成用户可见的开、关、待批准，并处理失败提示 |
+| 再次打开 | `MacResourceMonitor/AppDelegate.swift` | `AppDelegate.applicationShouldHandleReopen()` | 图标始终可见时不自动弹窗；登录静默由 `isLoginLaunch` 保证 |
+| 更新检查与退出申请 | `MacResourceMonitor/AppDelegate.swift` | `AppDelegate.checkForUpdates()`、`AppDelegate.requestTermination()`、`AppDelegate.applicationShouldTerminate()` | 检查更新只走应用内更新；退出是否放行取决于更新安装会话 |
 
 ## §4 表与字段入口索引
 
@@ -207,12 +207,12 @@ graph TD
 - 【禁止】以 `MenuBarExtra` 代替左键主路径；圆环与网速必须是两个独立 `NSStatusItem`（圆环只开 CPU/内存表，网速只开网络表且默认 Download 降序）；先建网速项再建圆环项以固定「圆环在左」。禁止叠透明子视图或从 `NSApp.currentEvent` 切坐标（原因：菜单栏局部命中不可靠，已多次错送）。
 - 【禁止】用 `NSClickGestureRecognizer` 的右键 `buttonMask` 接状态项右键；状态栏按钮会吞事件，右键常完全无菜单。左右键一律 `sendAction(on: [.leftMouseUp, .rightMouseUp])`，右键临时挂 `menu` + `performClick` 后卸掉（与 MacKitStatusItem / HandySwitch 同构）。
 - **AI 易错点**【锚定 / 点外】实现须符合全局锚定与保留区规则；本产品入口：`StatusItemController.buttonScreenFrame()`、`PanelPlacement.isMenuBarAnchor()`、`AppDelegate.showPanelBelowStatusItem()`、`PanelDismiss.shouldHide()`。
-- 【隐性依赖】面板显示状态必须通过 `CompactPanel.onVisibilityChange` 回传给 `ProcessListModel` → 面板收起时停止进程列表更新，面板显示时才允许更新（原因：列表刷新与菜单栏双环不是同一刷新开关）。
+- 【隐性依赖】面板显示状态必须通过 `CompactPanel.onVisibilityChange` 回传给 `ProcessListModel` / `NetworkListModel` → CPU/内存表收起时停止写入可见名单；网络表后台继续预热最近一帧（原因：列表冻结与菜单栏双环不是同一开关；网络表要预热）。
 - 【隐性依赖】网络表必须复用进程表的责任对象、图标和结束限制 -> 按成员进程汇总系统 `nettop` 的上下行速率，结束仍走同一条安全结束边界；不得改成裸 PID 列表（原因：否则会把同一应用拆散，或绕过系统进程与其他用户的保护）。
 - 【节奏锁定】网络表使用 `nettop` 的一秒差分（首帧只做基线、第二帧产出速率），每帧完成后立即开始下一次读取 -> 禁止用两次独立累计快照或额外两秒等待（原因：网络表会明显落后菜单栏读数，像两套互不相干的监视器）。
-- 【首开状态】网络表收起后保留最近一次有效名单；首次还没有名单时，必须显示“正在读取网络占用”，采样完成但没有流量时显示“当前没有网络占用” -> 禁止留出空白或白屏（原因：系统首个一秒差分尚未完成是正常状态，不应让用户误判应用卡住）。
-- **AI 易错点**【网络名单闪烁】某一拍上下行都为 0 时不得立刻踢出该责任行 -> `NetworkListPresence` 必须对刚有过流量的行保留约 5 秒（显示 `0 KB/s`），进程已不在责任名单时才立即移除（原因：Chrome 等应用经常某一秒没包，秒级踢出再进入会让用户以为名单坏了；借鉴同类监视器的时间保持，而不是额外迟滞）。
-- **AI 易错点**【冻结边界】关闭列表刷新或收起面板时，不得停止 `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、网速采样或表头整机汇总 -> 只冻结名单快照（原因：双环和全机读数必须持续反映真实系统）。
+- 【首开状态】**禁止**打开网络表时展示「正在读取」加载屏。收起后保留最近一帧；应用启动后后台预热；采样完成但没有流量时显示「当前没有网络占用」。预热尚未交出首帧且确实空名单时，也只显示空态，不要加载占位（原因：用户要求点开即流畅）。
+- **AI 易错点**【网络名单闪烁】某一拍上下行都为 0 时不得立刻踢出该责任行 -> `NetworkListPresence` 必须对刚有过流量的行保留约 15 秒（显示 `0 KB/s`），进程已不在责任名单时才立即移除（原因：Chrome 等应用经常某一秒没包，秒级踢出再进入会让用户以为名单坏了；借鉴同类监视器的时间保持，而不是额外迟滞）。
+- **AI 易错点**【冻结边界】打开列表冻结（Freeze / 冻结）时，名单顺序与成员尽量不动，但**行内占用数字必须继续刷新**；不得停止 `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、网速采样或表头整机汇总；点列头排序须自动关冻结（原因：冻结是对准结束，不是冻住读数；双环和全机读数必须持续反映真实系统）。
 - **AI 易错点**【网速来源】网速不是所有网卡字节的总和 -> `NetworkSpeedMonitor` 只读当前默认路由接口，并在接口变化时清除基线、先显示无样本（原因：切换 Wi-Fi、以太网或 VPN 时累加或沿用旧数都会制造假流量）。
 - **AI 易错点**【网速显示开关】关闭“显示网速”不能调用 `NetworkSpeedMonitor.stop()`，也不能影响双环、左键或其他菜单项 -> 只改 `MenuBarDisplayPreferences.showsNetworkSpeed` 后重绘（跨产品原则见全局「显示开关 ≠ 停采样」）。
 - 【排版锁定】`MenuBarIconRenderer.drawNetworkSpeed()` 的上行永远在上并显示 `↑`，下行永远在下并显示 `↓` -> 若视觉位置颠倒，修纵向基线或布局边界，不得交换两个读数或箭头掩盖问题（原因：方向语义不能由大小或坐标猜测）。
@@ -252,14 +252,14 @@ graph TD
 
 ```bash
 xcodegen generate
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -configuration Release \
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release \
   -derivedDataPath build/DerivedData -destination 'platform=macOS' build
 ```
 
 确认 Release 应用能构建，且本领域引用的菜单栏、恢复窗口和网速绘制代码可以进入最终安装产物。构建通过不等于菜单栏行为已验收。
 
 ```bash
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller \
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
   -derivedDataPath build/DerivedData -destination 'platform=macOS' test
 ```
 
@@ -267,7 +267,7 @@ xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller \
 
 ### 人工菜单栏交互验收
 
-必须在实际安装版打开 CPU Killer 后完成，不能用构建成功或 AX 树代替：
+必须在实际安装版打开 Mac Resource Monitor 后完成，不能用构建成功或 AX 树代替：
 
 1. 左键图标，确认进程表水平居中于图标下方；连续点面板内和原图标不关，点其他地方立即关；外接屏或菜单栏在屏幕底部时，表仍向可见区域内展开且不掉到角落。
 2. 右键图标，确认只在右键出现菜单；左键没有变成菜单。确认开机自启为关或待批准时的中间态，待批准可直接去系统登录项。

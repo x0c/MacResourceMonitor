@@ -1,19 +1,19 @@
 **Languages:** English | [简体中文](README.zh-CN.md)
 
-# CPU Killer
+# Mac Resource Monitor
 
 <p align="center">
-  <img src="docs/images/app-icon.png" width="128" height="128" alt="CPU Killer app icon: a white CPU chip">
+  <img src="docs/images/app-icon.png" width="128" height="128" alt="Mac Resource Monitor app icon: a white CPU chip">
 </p>
 
-CPU Killer is a **macOS menu bar process table**. When the machine feels stuck, open it, see which app is using the CPU, and end that row.
+Mac Resource Monitor is a **macOS menu bar process table**. When the machine feels stuck, open it, see which app is using the CPU, and end that row.
 
-It is not Stats or Activity Monitor. There is no process tree and no sensors. The process table lives in the menu bar. If you hide that icon, a small recovery window is how you find the app again — it is not a desktop process table.
+It is not Stats or Activity Monitor. There is no process tree and no sensors. The process table lives in the menu bar — that icon is the only everyday entry, and it cannot be hidden.
 
 **Requires macOS 26 or later.** Open source under the MIT License. Everything stays on your Mac — no account, no telemetry.
 
 <p align="center">
-  <img src="docs/images/panel.png" width="480" alt="CPU Killer menu bar table showing apps with CPU and memory use and an end control">
+  <img src="docs/images/panel.png" width="480" alt="Mac Resource Monitor menu bar table showing apps with CPU and memory use and an end control">
 </p>
 
 ## Supported platforms
@@ -27,28 +27,28 @@ It is not Stats or Activity Monitor. There is no process tree and no sensors. Th
 
 ```sh
 brew tap x0c/tap
-brew install --cask cpu-killer
+brew install --cask mac-resource-monitor
 ```
 
 ### Direct download
 
-Grab the latest **signed and notarized** `CPU-Killer-x.y.z.dmg` from the [releases](https://github.com/x0c/CPUKiller/releases/latest) page, then drag CPU Killer to `/Applications`.
+Grab the latest **signed and notarized** `Mac-Resource-Monitor-x.y.z.dmg` from the [releases](https://github.com/x0c/MacResourceMonitor/releases/latest) page, then drag Mac Resource Monitor to `/Applications`.
 
-CPU Killer checks for updates automatically (via [Sparkle](https://sparkle-project.org)). Right-click the menu bar icon for **Check for Updates…**.
+Mac Resource Monitor checks for updates automatically (via [Sparkle](https://sparkle-project.org)). Right-click the menu bar icon for **Check for Updates…**.
 
 ### Build from source
 
 Requires Xcode 26+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```sh
-git clone https://github.com/x0c/CPUKiller.git
-cd CPUKiller
+git clone https://github.com/x0c/MacResourceMonitor.git
+cd MacResourceMonitor
 xcodegen generate
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -configuration Release \
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build/DerivedData build
-rm -rf "/Applications/CPU Killer.app"
-ditto "build/DerivedData/Build/Products/Release/CPU Killer.app" "/Applications/CPU Killer.app"
-open "/Applications/CPU Killer.app"
+rm -rf "/Applications/Mac Resource Monitor.app"
+ditto "build/DerivedData/Build/Products/Release/Mac Resource Monitor.app" "/Applications/Mac Resource Monitor.app"
+open "/Applications/Mac Resource Monitor.app"
 ```
 
 ## Usage
@@ -64,7 +64,8 @@ open "/Applications/CPU Killer.app"
 - Flat table of the processes that actually matter, with human names (ChatGPT stays ChatGPT, not `node`)
 - Whole-machine CPU % (capped at 100%) and physical memory %
 - One-click end for your own processes; system processes stay listed but cannot be killed
-- Live refresh with a freeze switch so you can aim; hovering End pins that row
+- Freeze toggle (English **Freeze** / Chinese **冻结**, off by default) keeps row order steady while numbers keep updating; tapping a column header sorts and turns Freeze off; hovering End pins that row
+- Network list is prewarmed in the background—no loading screen when you open it; quiet processes stay at `0 KB/s` briefly instead of flickering out
 - Menu bar dual ring keeps updating even when the table is closed or frozen
 
 ## Not in scope

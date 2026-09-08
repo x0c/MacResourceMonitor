@@ -18,7 +18,7 @@
 
 ## §1 业务背景与核心概念
 
-**实时占用与结束**是 CPU Killer 的核心使用链路：用户在菜单栏点开一张极简平表，看到当前哪个责任对象占用整机 CPU 或物理内存，并在允许的边界内结束它。它不是通用的系统监视器，也不提供进程树、子进程展开、历史曲线或远程控制。
+**实时占用与结束**是 Mac Resource Monitor 的核心使用链路：用户在菜单栏点开一张极简平表，看到当前哪个责任对象占用整机 CPU 或物理内存，并在允许的边界内结束它。它不是通用的系统监视器，也不提供进程树、子进程展开、历史曲线或远程控制。
 
 本域以一行人能理解的对象为最小交互单位，而不是以 Unix 父子关系或单个 PID 为最小单位。一次展示行可能代表一个桌面应用及其被归入的辅助进程；结束一行时也按该行的成员 PID 集合处理。因此，修改本域时必须同时看采样、归类、排名与结束，不能只改其中一层。
 
@@ -33,7 +33,7 @@
 | CPU 整机占比 | `CPUTime.percent()` | 一条展示行相对整机逻辑核能力的 CPU 百分比，范围固定为 0–100%。 |
 | 行内存占比 | `ProcessRow.memoryPercent` | 该展示行成员物理占用总和除以机器物理内存，不等于系统级内存占用。 |
 | 系统内存占比 | `ProcessListModel.systemMemoryPercent` | 系统级物理内存占用，用于表头；不能由展示行内存相加得到。 |
-| 刷新冻结 | `refreshEnabled` | 只冻结进程表的名单，不停止系统汇总指标的采样与通知。 |
+| 列表冻结 | `listFrozen` | 打开后稳住名单顺序与成员，不按占用重排、不插新行；行内占用数字仍刷新。默认关。点列头排序会自动关掉。 |
 | 结束行钉位 | `pinnedRowID` / `pinnedIndex` | 鼠标停在一行结束符号上时，保持该行的位置以避免刷新后误杀。 |
 
 `ProcessIdentity` 由 PID 与启动时间组成。缓存和前后 CPU 样本以它为身份，而不只以 PID；这避免 PID 被系统复用时沿用旧参数或旧 CPU 样本。
@@ -90,13 +90,13 @@ sequenceDiagram
 
 ### 2.1 面板可见、采样与名单更新
 
-1. `ProcessListModel` 初始化时读取刷新开关的本地偏好并启动循环。循环会先进行两次短间隔刷新，之后按项目设定的刷新间隔继续刷新。
+1. `ProcessListModel` 初始化时读取冻结开关的本地偏好并启动循环。循环会先进行两次短间隔刷新，之后按项目设定的刷新间隔继续刷新。
 2. 面板可见状态由 `ProcessListModel.setPanelVisible()` 接收。变为可见时会立刻请求一次刷新；变为不可见时会清除钉位。
 3. `ProcessListModel.refresh()` 用 `isRefreshing` 防止同一时刻并行进入两次刷新。
 4. `ProcessSampler.snapshot()` 枚举 PID，并为每个能读取路径的有效 PID 采集原始记录；无法获得路径、PID 非正数或系统调用失败的记录会被跳过。
 5. 采样器读取进程启动时刻、父 PID、所属用户、可执行路径、首次缓存的参数、责任 PID、累计 CPU 时间和物理占用。
 6. `DisplayClassifier.rows()` 根据责任对象聚合原始记录，并产出默认按 CPU 降序的展示行。
-7. 只有在面板可见且刷新开关开启时，新的展示行名单才覆盖当前 `rows`；如果名单尚为空，即使刷新开关关也会先采一拍，避免首次打开没有任何内容。
+7. 只有在面板可见时才把新采样写入可见 `rows`。未冻结时整表替换；冻结时按原顺序留下仍存活的行并用最新占用数字更新，不插入新行。名单尚空时即使冻结也会先采一拍。
 8. 如果钉住的行已经不在新名单中，`refresh()` 会立即清除钉位，不留下不可见的幽灵行。
 9. CPU 与系统内存汇总无论名单是否冻结都继续更新，并通过已注册的指标观察者通知菜单栏消费者。
 
@@ -129,13 +129,13 @@ sequenceDiagram
 
 归类时选 CPU 最高的成员作为该行引导记录，用于种类、展示名和图标路径。行 CPU 是成员 CPU 的总和且不超过 100%，行内存是成员物理占用的总和。表永远是平表；聚合关系不向用户展开成树。
 
-### 2.5 可见行、排序、刷新冻结与钉位
+### 2.5 可见行、排序、冻结与钉位
 
-`ProcessTableRanking.visibleRows()` 每次按当前列的数值从高到低排序；相同值用不区分大小写的展示名稳定打破并列。CPU 和内存都是单向降序，重复点同一列不会切换升序。
+`ProcessTableRanking.visibleRows()` 在未冻结时按当前列的数值从高到低排序；相同值用不区分大小写的展示名稳定打破并列。CPU 和内存都是单向降序，重复点同一列不会切换升序。冻结打开时保持快照顺序，不再重排。
 
-可见范围并非无上限：CPU 至少 0.1% 或内存至少 0.4% 的忙碌行达到 8 行时，只显示忙碌行；否则显示排序后的前 12 行。这让刚打开的表避免被大量 0.0% 行占满。
+可见范围并非无上限：未冻结时，CPU 至少 0.1% 或内存至少 0.4% 的忙碌行达到 8 行时，只显示忙碌行；否则显示排序后的前 12 行。这让刚打开的表避免被大量 0.0% 行占满。冻结时展示冻结当下的可见快照。
 
-刷新开关关闭时，`rows` 保持上一次名单，便于用户对准一行；表头整机指标不应跟着冻结。面板收起后，进程表名单不再覆盖更新，钉位也会清除。
+冻结开关（界面文案 Freeze / 冻结，默认关）打开时，`rows` 保持冻结当下的顺序：仍存活的行用最新占用数字原位更新，已消失的行拿掉，新进程不插进来；表头整机指标与行内数字都继续刷。点可排序列头会调用 `selectSort`：关掉冻结并按该列排序。面板收起后，进程表名单不再覆盖更新，钉位也会清除。
 
 当鼠标进入一行结束符号，`ProcessListModel.setEndHover(true,rowID:)` 先算出当前可见索引，再记录该行 ID 与索引。后续刷新仍使用新的对象和最新占用数，但排名器把这行插回原位置。鼠标离开后有短暂延迟再解除，以避免在控件边界抖动；若悬停行已消失，刷新会立即解除。钉位只属于结束符号，不是整张表冻结。
 
@@ -151,7 +151,7 @@ sequenceDiagram
 
 ### 2.7 表内呈现与可访问性
 
-`ProcessTableView` 只渲染 `model.visibleRows`，顶部放刷新开关、CPU/内存汇总列和不可排序的结束列占位。当前排序列为主色，另一列为次要色。每行由 `ProcessRowView` 显示图标、人话名、CPU、内存和结束符号。
+`ProcessTableView` 只渲染 `model.visibleRows`，顶部放冻结开关、CPU/内存汇总列和不可排序的结束列占位。未冻结时当前排序列为主色，另一列为次要色；冻结时列头都不强调排序。每行由 `ProcessRowView` 显示图标、人话名、CPU、内存和结束符号。
 
 结束符号是简洁的关闭图标，而不是文字按钮；仅在可结束且悬停时变红。系统保护或非当前用户行的控件禁用并给出对应帮助说明。行的无障碍文案包含人话名、CPU 与内存百分比；按钮也有无障碍名称和限制原因。
 
@@ -159,28 +159,28 @@ sequenceDiagram
 
 | 目录（相对 app-macos 项目根） | 内容 | 关键类/文件数 |
 |---|---|---|
-| `CPUKiller/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`，7 个文件 |
-| `CPUKiller/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
-| `CPUKiller/Views/` | 进程表表头、排序触发、行呈现、结束触发和悬停钉位入口 | `ProcessTableView.swift`、`ProcessRowView.swift`，2 个文件 |
-| `CPUKillerTests/` | 排名、钉位、归类、系统保护和 CPU 上限的回归测试 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`，2 个文件 |
+| `MacResourceMonitor/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`，7 个文件 |
+| `MacResourceMonitor/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
+| `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、结束触发和悬停钉位入口 | `ProcessTableView.swift`、`ProcessRowView.swift`，2 个文件 |
+| `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护和 CPU 上限的回归测试 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`，2 个文件 |
 | `docs/` | 本域产品行为权威契约及本知识库 | `PRODUCT_CONTRACT.md` 与本文件，2 个文件 |
 
 ## §3 本域代码入口索引
 
 | 场景 | 入口 | 类/方法/配置 | 说明 |
 |---|---|---|---|
-| 修改面板是否更新名单、刷新循环或表头指标 | 主状态协调 | `CPUKiller/Services/ProcessListModel.swift` · `ProcessListModel.refresh()`、`start()`、`setPanelVisible()` | 采样、名单覆盖、系统汇总、钉位失效和错误回显的汇合点。 |
-| 修改 PID 枚举、进程身份、CPU 或物理内存采样 | 系统采样 | `CPUKiller/Services/ProcessSampler.swift` · `ProcessSampler.snapshot()`、`sample()` | 逐 PID 获取原始记录并维护前后 CPU 样本。 |
-| 修改 CPU 数学口径或 Rosetta 回退 | CPU 换算 | `CPUKiller/Services/CPUTime.swift` · `CPUTime.percent()` | 将累计 mach ticks 的差转为整机逻辑核百分比。 |
-| 修改启动参数缓存或 PID 复用保护 | 参数缓存 | `CPUKiller/Services/ArgumentCache.swift` · `arguments(for:)`、`prune(keeping:)` | 参数按 PID 与启动时间缓存，随存活身份清理。 |
-| 修改责任 PID 取得方式 | 系统责任归属 | `CPUKiller/Services/Responsibility.swift` · `pidResponsible(for:)` | 动态读取责任 PID，失败时退回当前 PID。 |
-| 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `CPUKiller/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
-| 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `CPUKiller/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
-| 修改结束权限、正常结束、强制结束或失败判断 | 终止执行 | `CPUKiller/Services/ProcessTerminator.swift` · `ProcessTerminator.end()` | 依据行种类与安全标记结束成员 PID。 |
-| 修改表头、刷新开关或排序点击 | 表格视图 | `CPUKiller/Views/ProcessTableView.swift` · `ProcessTableView.body`、`sortHeader()` | 连接主状态与表头互动，不承担采样计算。 |
-| 修改结束图标、禁用状态、悬停或行内视觉 | 行视图 | `CPUKiller/Views/ProcessRowView.swift` · `endButton`、`helpText()` | 只把当前行状态映射到 UI 与回调。 |
-| 修改归类、保护和口径后的回归保护 | 分类测试 | `CPUKillerTests/DisplayClassifierTests.swift` | 覆盖 ChatGPT、Cursor Agent、pi、Corral、独立工具、保护行和 CPU 上限。 |
-| 修改排序、空闲筛选或钉位后的回归保护 | 排名测试 | `CPUKillerTests/ProcessTableRankingTests.swift` | 覆盖 CPU/内存降序、忙碌筛选、百分比格式和钉位更新。 |
+| 修改面板是否更新名单、刷新循环或表头指标 | 主状态协调 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessListModel.refresh()`、`start()`、`setPanelVisible()` | 采样、名单覆盖、系统汇总、钉位失效和错误回显的汇合点。 |
+| 修改 PID 枚举、进程身份、CPU 或物理内存采样 | 系统采样 | `MacResourceMonitor/Services/ProcessSampler.swift` · `ProcessSampler.snapshot()`、`sample()` | 逐 PID 获取原始记录并维护前后 CPU 样本。 |
+| 修改 CPU 数学口径或 Rosetta 回退 | CPU 换算 | `MacResourceMonitor/Services/CPUTime.swift` · `CPUTime.percent()` | 将累计 mach ticks 的差转为整机逻辑核百分比。 |
+| 修改启动参数缓存或 PID 复用保护 | 参数缓存 | `MacResourceMonitor/Services/ArgumentCache.swift` · `arguments(for:)`、`prune(keeping:)` | 参数按 PID 与启动时间缓存，随存活身份清理。 |
+| 修改责任 PID 取得方式 | 系统责任归属 | `MacResourceMonitor/Services/Responsibility.swift` · `pidResponsible(for:)` | 动态读取责任 PID，失败时退回当前 PID。 |
+| 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `MacResourceMonitor/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
+| 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
+| 修改结束权限、正常结束、强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()` | 依据行种类与安全标记结束成员 PID。 |
+| 修改表头、冻结开关或排序点击 | 表格视图 | `MacResourceMonitor/Views/ProcessTableView.swift` · `ProcessTableView.body`、`sortHeader()` | 连接主状态与表头互动，不承担采样计算。 |
+| 修改结束图标、禁用状态、悬停或行内视觉 | 行视图 | `MacResourceMonitor/Views/ProcessRowView.swift` · `endButton`、`helpText()` | 只把当前行状态映射到 UI 与回调。 |
+| 修改归类、保护和口径后的回归保护 | 分类测试 | `MacResourceMonitorTests/DisplayClassifierTests.swift` | 覆盖 ChatGPT、Cursor Agent、pi、Corral、独立工具、保护行和 CPU 上限。 |
+| 修改排序、空闲筛选或钉位后的回归保护 | 排名测试 | `MacResourceMonitorTests/ProcessTableRankingTests.swift` | 覆盖 CPU/内存降序、忙碌筛选、百分比格式和钉位更新。 |
 
 ## §4 本域表与字段入口索引
 
@@ -188,14 +188,14 @@ sequenceDiagram
 
 | 内存模型 / 属性 | 定义位置 | 业务语义 | 改动注意 |
 |---|---|---|---|
-| `RawProcess.identity` | `CPUKiller/Models/ProcessRow.swift` | PID 与启动时间的复合身份 | 用于防 PID 复用；不能将参数缓存或 CPU 历史只按 PID 键控。 |
-| `RawProcess.ppid` 与 `responsiblePID` | `CPUKiller/Models/ProcessRow.swift` | Unix 父关系与系统责任关系 | 两者都用于归类线索，但产品结果是平表，不应改成父子树。 |
-| `RawProcess.cpuPercent` | `CPUKiller/Models/ProcessRow.swift` | 单个 PID 的整机逻辑核 CPU 占比 | 由前后采样差计算，不是累计时间或单核百分比。 |
-| `RawProcess.memoryBytes` | `CPUKiller/Models/ProcessRow.swift` | 单个 PID 的物理占用字节数 | 使用 physical footprint；不要改成 resident 口径。 |
-| `ProcessRow.memberIdentities` / `memberPIDs` | `CPUKiller/Models/ProcessRow.swift` | 一行包含的成员身份；`memberPIDs` 为派生只读视图 | 结束与存活检测必须用身份；禁止只按 PID 发 SIGKILL。 |
-| `ProcessRow.cpuPercent` 与 `memoryPercent` | `CPUKiller/Models/ProcessRow.swift` | 行级 CPU 与行级物理内存百分比 | 行内存不是系统内存；表头内存不能由它累加。 |
-| `ProcessRow.kind` | `CPUKiller/Models/ProcessRow.swift` | 行种类，决定显示与结束策略 | 改新种类时必须同步归类器、结束器和测试。 |
-| `ProcessRow.isCurrentUser` 与 `isSystemProtected` | `CPUKiller/Models/ProcessRow.swift` | 结束是否被允许的安全状态 | 视图禁用与结束器二次拦截都必须保留。 |
+| `RawProcess.identity` | `MacResourceMonitor/Models/ProcessRow.swift` | PID 与启动时间的复合身份 | 用于防 PID 复用；不能将参数缓存或 CPU 历史只按 PID 键控。 |
+| `RawProcess.ppid` 与 `responsiblePID` | `MacResourceMonitor/Models/ProcessRow.swift` | Unix 父关系与系统责任关系 | 两者都用于归类线索，但产品结果是平表，不应改成父子树。 |
+| `RawProcess.cpuPercent` | `MacResourceMonitor/Models/ProcessRow.swift` | 单个 PID 的整机逻辑核 CPU 占比 | 由前后采样差计算，不是累计时间或单核百分比。 |
+| `RawProcess.memoryBytes` | `MacResourceMonitor/Models/ProcessRow.swift` | 单个 PID 的物理占用字节数 | 使用 physical footprint；不要改成 resident 口径。 |
+| `ProcessRow.memberIdentities` / `memberPIDs` | `MacResourceMonitor/Models/ProcessRow.swift` | 一行包含的成员身份；`memberPIDs` 为派生只读视图 | 结束与存活检测必须用身份；禁止只按 PID 发 SIGKILL。 |
+| `ProcessRow.cpuPercent` 与 `memoryPercent` | `MacResourceMonitor/Models/ProcessRow.swift` | 行级 CPU 与行级物理内存百分比 | 行内存不是系统内存；表头内存不能由它累加。 |
+| `ProcessRow.kind` | `MacResourceMonitor/Models/ProcessRow.swift` | 行种类，决定显示与结束策略 | 改新种类时必须同步归类器、结束器和测试。 |
+| `ProcessRow.isCurrentUser` 与 `isSystemProtected` | `MacResourceMonitor/Models/ProcessRow.swift` | 结束是否被允许的安全状态 | 视图禁用与结束器二次拦截都必须保留。 |
 
 ## §5 流程、组件、任务与 MQ 入口索引
 
@@ -203,10 +203,10 @@ sequenceDiagram
 
 | 类型 | 标识 | 代码入口 | 适用场景 |
 |---|---|---|---|
-| 进程内刷新循环 | `listLoop` | `CPUKiller/Services/ProcessListModel.swift` · `start()`、`stop()` | 维护面板名单与系统汇总的周期性采样。 |
-| 主线程状态协调 | `@MainActor` 主状态 | `CPUKiller/Services/ProcessListModel.swift` | 把异步采样、行列表和 UI 可观察状态安全地汇合。 |
-| 隔离采样器 | `actor ProcessSampler` | `CPUKiller/Services/ProcessSampler.swift` | 维护跨采样的 CPU 历史与参数缓存调用。 |
-| 隔离参数缓存 | `actor ArgumentCache` | `CPUKiller/Services/ArgumentCache.swift` | 避免每一拍反复读取同一进程参数。 |
+| 进程内刷新循环 | `listLoop` | `MacResourceMonitor/Services/ProcessListModel.swift` · `start()`、`stop()` | 维护面板名单与系统汇总的周期性采样。 |
+| 主线程状态协调 | `@MainActor` 主状态 | `MacResourceMonitor/Services/ProcessListModel.swift` | 把异步采样、行列表和 UI 可观察状态安全地汇合。 |
+| 隔离采样器 | `actor ProcessSampler` | `MacResourceMonitor/Services/ProcessSampler.swift` | 维护跨采样的 CPU 历史与参数缓存调用。 |
+| 隔离参数缓存 | `actor ArgumentCache` | `MacResourceMonitor/Services/ArgumentCache.swift` | 避免每一拍反复读取同一进程参数。 |
 
 ## §6 核心业务规则与隐性约束
 
@@ -224,14 +224,14 @@ sequenceDiagram
 - **AI 易错点**【禁止】刷新时冻结整张表或仅保存钉住行的旧值 -> 必须只钉结束符号悬停的那一行的位置，并使用新采样的行对象和数值（原因：防误杀不能牺牲其他占用信息的实时性）。
 - **AI 易错点**【禁止】悬停行消失后继续保留钉位 -> 必须在 `refresh()` 发现 ID 不存在时立即清除（原因：否则会产生幽灵行或错误插入位置）。
 - 【隐性依赖】修改行种类或保护判定前必须同时检查 `DisplayClassifier.makeRow()`、`ProcessTerminator.end()`、`ProcessRowView.endButton` 和分类测试，否则会出现“视觉上可结束但实际阻止”或相反的边界分裂。
-- 【隐性依赖】修改刷新开关前必须同时检查名单更新与系统汇总通知；开关冻结的是名单，表头 CPU/内存和菜单栏指标仍应刷新。
+- 【隐性依赖】修改冻结开关前必须同时检查名单更新与系统汇总通知；开关冻结的是名单，表头 CPU/内存和菜单栏指标仍应刷新。点列头必须关冻结。
 - 【隐性依赖】修改 Apple Silicon 或 Rosetta 的 CPU 采样时必须同时检查 ticks 到纳秒的换算与逻辑核归一化；只换墙钟时间会让数值失真。
 - 【隐性语义】`ProcessListModel.refresh()` 对 `isRefreshing` 的保护使同一时刻只允许一个刷新；新增异步入口时不要绕开它并直接覆写 `rows`。
 - 【隐性语义】`ArgumentCache` 仅在某一 `ProcessIdentity` 第一次出现时读取参数，并在快照完成后按存活身份清理；新增参数识别规则不能改成每秒读取全机参数。
 - 【禁止】将系统保护只按展示名称判断 -> 必须保留 PID、保护名称和系统路径三类保护线索，且路径须覆盖 `/System/`、`/usr/libexec/`、`/usr/sbin/`、`/sbin/`（原因：WindowServer 等短名可能被误判为普通具名工具；`/usr/sbin` 不在旧前缀里）。
 - 【禁止】把失败的结束结果吞掉 -> 必须让 `ProcessListModel.end()` 写入本地化失败信息并刷新（原因：用户需要知道仍有成员存活，而不是误以为已结束）。
 - 【消歧】行内存占比 vs 系统内存占比：前者属于 `ProcessRow`，是可见责任对象成员的 physical footprint；后者属于 `ProcessListModel`，是 host VM 的整机口径。两者不能互传或相加。
-- 【消歧】刷新冻结 vs 结束行钉位：前者冻结整份名单以便用户定位；后者只在结束符号悬停期间保持一行位置，数值依旧刷新。两者不可互相替代。
+- 【消歧】列表冻结 vs 结束行钉位：前者冻结整份名单以便用户定位；后者只在结束符号悬停期间保持一行位置，数值依旧刷新。两者不可互相替代。
 
 ## §7 常见易忽略条件与验证路径
 
@@ -240,19 +240,19 @@ sequenceDiagram
 在 `app-macos/` 执行以下命令。若改动涉及工程文件，先执行 `xcodegen generate`，因为 `project.yml` 是工程的唯一来源。
 
 ```bash
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -destination 'platform=macOS' test -only-testing:CPUKillerTests/ProcessTableRankingTests
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -destination 'platform=macOS' test -only-testing:MacResourceMonitorTests/ProcessTableRankingTests
 ```
 
 检查：CPU 与内存均降序；忙碌筛选不让空闲行挤占首屏；百分比保持一位小数；钉住行保留原位置、采用新数值、消失时没有幽灵行。
 
 ```bash
-xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -destination 'platform=macOS' test -only-testing:CPUKillerTests/DisplayClassifierTests
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -destination 'platform=macOS' test -only-testing:MacResourceMonitorTests/DisplayClassifierTests
 ```
 
 检查：ChatGPT 家族聚合、Cursor Agent 独立、pi/Corral 人话名、Cursor 启动的独立工具不被折叠、系统保护和 CPU 上限均不回退。
 
 ```bash
-xcodegen generate && xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -configuration Release -derivedDataPath build/DerivedData -destination 'platform=macOS' build
+xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release -derivedDataPath build/DerivedData -destination 'platform=macOS' build
 ```
 
 检查：Release 产物可构建；本域的 Swift 并发隔离和系统 API 调用没有被改坏。
@@ -272,7 +272,7 @@ xcodegen generate && xcodebuild -project CPUKiller.xcodeproj -scheme CPUKiller -
 
 ## §8 关联文档
 
-- [产品契约](PRODUCT_CONTRACT.md)：涉及人话名、整机 CPU/内存口径、刷新开关、排序、钉行、结束边界或用户可见表格行为时联读；它是用户可见行为的权威来源。
+- [产品契约](PRODUCT_CONTRACT.md)：涉及人话名、整机 CPU/内存口径、冻结开关、排序、钉行、结束边界或用户可见表格行为时联读；它是用户可见行为的权威来源。
 - [菜单栏操作与恢复领域知识库](MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：菜单栏域通过 `AppDelegate.listModel`、`CompactPanel` 和 `StatusItemController` 消费本域的系统汇总与显示状态。改面板唤出、可见状态或菜单栏显示时联读；不在本域重写左右键、隐藏或恢复窗口规则。
 - [安装、更新与公开发布领域知识库](DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)：本域没有运行时依赖；当修改影响构建、签名、安装或公开发版时可选联读。
 - [macOS 进程身份知识库](~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md)：改责任进程、人话名或 CPU 口径前联读，避免以 Unix 父子树替代责任对象。

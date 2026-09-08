@@ -1,4 +1,4 @@
-name: CPUKiller
+name: MacResourceMonitor
 
 options:
   deploymentTarget:
@@ -23,8 +23,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: SHZQ3MWP3B
-    CURRENT_PROJECT_VERSION: 31
-    MARKETING_VERSION: 1.0.20
+    CURRENT_PROJECT_VERSION: 34
+    MARKETING_VERSION: 1.1.0
     COMBINE_HIDPI_IMAGES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     SWIFT_STRICT_CONCURRENCY: complete
@@ -69,29 +69,29 @@ fileGroups:
   - design
 
 targets:
-  CPUKiller:
+  MacResourceMonitor:
     type: application
     platform: macOS
     deploymentTarget: "26.0"
     sources:
-      - path: CPUKiller
+      - path: MacResourceMonitor
         excludes:
           - AppIcon.icon
           - "AppIcon.icon/**"
     resources:
-      - path: CPUKiller/AppIcon.icon
+      - path: MacResourceMonitor/AppIcon.icon
     entitlements:
-      path: CPUKiller/CPUKiller.entitlements
+      path: MacResourceMonitor/MacResourceMonitor.entitlements
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: top.caozc.CPUKiller
-        PRODUCT_MODULE_NAME: CPUKiller
-        PRODUCT_NAME: CPU Killer
+        PRODUCT_BUNDLE_IDENTIFIER: top.caozc.MacResourceMonitor
+        PRODUCT_MODULE_NAME: MacResourceMonitor
+        PRODUCT_NAME: Mac Resource Monitor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_FILE: CPUKiller/Info.plist
-        INFOPLIST_KEY_CFBundleDisplayName: CPU Killer
-        INFOPLIST_KEY_CFBundleName: CPU Killer
+        INFOPLIST_FILE: MacResourceMonitor/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Mac Resource Monitor
+        INFOPLIST_KEY_CFBundleName: Mac Resource Monitor
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 x0c. Released under the MIT License."
@@ -114,39 +114,39 @@ targets:
       - package: MacKit
         product: MacKitUpdater
 
-  CPUKillerTests:
+  MacResourceMonitorTests:
     type: bundle.unit-test
     platform: macOS
     deploymentTarget: "26.0"
     sources:
-      - CPUKillerTests
+      - MacResourceMonitorTests
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: top.caozc.CPUKiller.tests
-        PRODUCT_NAME: CPUKillerTests
+        PRODUCT_BUNDLE_IDENTIFIER: top.caozc.MacResourceMonitor.tests
+        PRODUCT_NAME: MacResourceMonitorTests
         GENERATE_INFOPLIST_FILE: YES
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: NO
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/CPU Killer.app/Contents/MacOS/CPU Killer
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Mac Resource Monitor.app/Contents/MacOS/Mac Resource Monitor
         BUNDLE_LOADER: $(TEST_HOST)
     dependencies:
-      - target: CPUKiller
+      - target: MacResourceMonitor
       - package: MacKit
         product: MacKitCore
 
 schemes:
-  CPUKiller:
+  MacResourceMonitor:
     build:
       targets:
-        CPUKiller: all
+        MacResourceMonitor: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - name: CPUKillerTests
+        - name: MacResourceMonitorTests
     analyze:
       config: Debug
     archive:
