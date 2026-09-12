@@ -1,19 +1,29 @@
 **Languages:** English | [简体中文](README.zh-CN.md)
 
-# Mac Resource Monitor
-
 <p align="center">
-  <img src="docs/images/app-icon.png" width="128" height="128" alt="Mac Resource Monitor app icon: a white CPU chip">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest">
+    <img src="docs/images/app-icon.png" width="128" height="128" alt="Mac Resource Monitor app icon: a rounded CPU chip">
+  </a>
 </p>
 
-Mac Resource Monitor is a **macOS menu bar process table**. When the machine feels stuck, open it, see which app is using the CPU, and end that row.
+<p align="center">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest"><img src="https://img.shields.io/github/v/release/x0c/MacResourceMonitor" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-26%2B-blue" alt="Requires macOS 26 or later">
+  <img src="https://img.shields.io/badge/License-MIT-orange" alt="MIT License">
+</p>
 
-It is not Stats or Activity Monitor. There is no process tree and no sensors. The process table lives in the menu bar — that icon is the only everyday entry, and it cannot be hidden.
+# Mac Resource Monitor
+
+**macOS CPU monitor in your menu bar.** See which app is eating CPU when your Mac feels stuck, then kill that process.
+
+It is not Stats or Activity Monitor. There are no sensors and no process tree. Click the menu bar icon, see the hog, end that row. That icon is the only everyday entry, and it cannot be hidden.
 
 **Requires macOS 26 or later.** Open source under the MIT License. Everything stays on your Mac — no account, no telemetry.
 
 <p align="center">
-  <img src="docs/images/panel.png" width="480" alt="Mac Resource Monitor menu bar table showing apps with CPU and memory use and an end control">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest">
+    <img src="docs/images/panel.png" width="480" alt="Menu bar table showing which apps are using CPU and memory, with an end control on each row">
+  </a>
 </p>
 
 ## Supported platforms
@@ -58,6 +68,8 @@ open "/Applications/Mac Resource Monitor.app"
 3. Hover the end control to pin that row so a refresh cannot swap it out from under the click. Click to end it.
 4. Click outside the table to close it. Right-click the icon for Launch at Login, Show Network Speed, Open Main Window, Settings, Check for Updates, or Quit.
 5. Launch at login is off by default. Login launches stay silent (no Settings window). The menu bar icon cannot be hidden.
+
+If this unstuck a Mac, a star on the repo helps other people find it.
 
 ## Features
 

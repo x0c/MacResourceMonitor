@@ -1,19 +1,29 @@
 **语言：** [English](README.md) | 简体中文
 
-# Mac Resource Monitor
-
 <p align="center">
-  <img src="docs/images/app-icon.png" width="128" height="128" alt="Mac Resource Monitor 应用图标：白色 CPU 芯片">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest">
+    <img src="docs/images/app-icon.png" width="128" height="128" alt="Mac Resource Monitor 应用图标：圆角 CPU 芯片">
+  </a>
 </p>
 
-Mac Resource Monitor 是 **macOS 菜单栏进程表**。电脑卡的时候点开，看清是谁在吃 CPU，然后结束那一行。
+<p align="center">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest"><img src="https://img.shields.io/github/v/release/x0c/MacResourceMonitor" alt="最新版本"></a>
+  <img src="https://img.shields.io/badge/macOS-26%2B-blue" alt="需要 macOS 26 或更高">
+  <img src="https://img.shields.io/badge/License-MIT-orange" alt="MIT 许可证">
+</p>
 
-它不是 Stats，也不是活动监视器。没有进程树、没有温度风扇。日常界面是菜单栏里那张表——图标就是唯一入口，不可隐藏。
+# Mac Resource Monitor
+
+**菜单栏里的 macOS CPU 监视。** 电脑卡住时看清是谁在吃 CPU，再从菜单栏结束那个进程。
+
+它不是 Stats，也不是活动监视器。没有温度风扇、没有进程树。点菜单栏图标，看到占用高的那一行，结束它。图标就是唯一日常入口，不可隐藏。
 
 **需要 macOS 26 或更高。** MIT 开源。数据只留在这台 Mac 上——没有账号，没有遥测。
 
 <p align="center">
-  <img src="docs/images/panel.png" width="480" alt="Mac Resource Monitor 菜单栏表：应用名、CPU 与内存占用、结束">
+  <a href="https://github.com/x0c/MacResourceMonitor/releases/latest">
+    <img src="docs/images/panel.png" width="480" alt="菜单栏表：哪些应用在用 CPU 和内存，每一行可以结束">
+  </a>
 </p>
 
 ## 支持的平台
@@ -56,8 +66,10 @@ open "/Applications/Mac Resource Monitor.app"
 1. 点菜单栏双环（外环 CPU、内环内存），表出现在图标正下方。
 2. 每一行是人话名、整机 CPU%、物理内存%、结束。点 CPU 或内存表头按该列从高到低排。
 3. 鼠标停在结束符号上时这一行钉住，刷新不会把你对准的行换掉。再点一下结束。
-4. 点表外面关掉。右键图标可开机自启、菜单栏图标不可隐藏；登录自启时静默，不弹设置窗。
-5. 开机自启默认关。菜单栏图标不可隐藏；登录自启时静默，不弹设置窗。
+4. 点表外面关掉。右键图标可开机自启、显示网速、打开主窗口、设置、检查更新或退出。
+5. 开机自启默认关。登录自启时静默，不弹设置窗。菜单栏图标不可隐藏。
+
+如果它帮你解开过卡住的 Mac，给仓库点一颗星，能让后来的人更容易找到。
 
 ## 功能
 

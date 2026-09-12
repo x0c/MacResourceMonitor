@@ -99,8 +99,8 @@ flowchart TD
 | `scripts/publish-release.sh` | 本地构建、签名、公证、发布与匿名终检 | `notarize_and_wait()`、`push_github_snapshot()` |
 | `scripts/publish-local.env.example` | 未入库的发行凭据配置模板 | 本地发行配置样例 |
 | `appcast.xml` | Sparkle 公开更新清单 | 更新版本条目 |
-| `README.md` | 英文用户安装说明 | `Install` |
-| `README.zh-CN.md` | 简体中文用户安装说明 | `安装` |
+| `README.md` | English storefront + install | Opening sentence, screenshots, `Install` |
+| `README.zh-CN.md` | Chinese storefront + install | Same structure as English |
 | `docs/PRODUCT_CONTRACT.md` | 对外分发的产品边界 | `权限与分发` |
 | `AGENTS.md` | 工程来源、覆盖安装和发行约束 | `构建与覆盖安装` |
 
@@ -120,6 +120,7 @@ flowchart TD
 | 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。 |
 | 改公开更新内容 | `appcast.xml` | Sparkle item 与签名尾部 | 必须由 Sparkle 工具生成和验证，不能手改后直接发布。 |
 | 改用户安装路径或安装说明 | `README.md`、`README.zh-CN.md` | Install / 安装段 | 英文说明为权威安装结构，中文说明保持同等渠道与边界。 |
+| 改 GitHub 默认可发现性 | GitHub About description + Topics (API/settings, not git) and README opening | First sentence of description | Default search scans **name, description, Topics only**. Frozen need queries: `macos cpu menu bar`, `macos kill process menu bar`, `macos menu bar cpu monitor`. Near-miss → rewrite that first sentence (`macOS … in your menu bar`); do not rename; do not treat a miss on `kill process` as total absence (port-killer noise). Honest **macOS 26+**. Pushing README does not update About. |
 
 ## §4 表与字段入口索引
 
