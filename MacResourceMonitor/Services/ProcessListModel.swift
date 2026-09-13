@@ -106,6 +106,10 @@ final class ProcessListModel {
         )
     }
 
+    var bulkEndCandidates: [ProcessRow] {
+        ProcessTerminationSelection.bulkCandidates(from: rows, excludingPID: getpid())
+    }
+
     func selectSort(_ column: ProcessSortColumn) {
         listFrozen = false
         sortColumn = column
@@ -209,6 +213,17 @@ final class ProcessListModel {
             break
         case .failed(let message):
             lastError = message
+        }
+        await refresh()
+    }
+
+    func endAll(_ candidates: [ProcessRow]) async {
+        lastError = nil
+        switch await ProcessTerminator.endAll(candidates) {
+        case .ended, .blocked:
+            break
+        case .failed:
+            lastError = String(localized: "table.endAll.failed")
         }
         await refresh()
     }

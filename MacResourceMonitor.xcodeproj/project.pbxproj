@@ -48,6 +48,7 @@
 		D9AC7B7FCCA4373488EA5EFF /* ArgumentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32CA3CFBBC1D00558B069DFE /* ArgumentCache.swift */; };
 		DAA4135F58C704FC8EFC4ADB /* ProcessTerminator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F5160B61F627C32EFA11AC7 /* ProcessTerminator.swift */; };
 		E849B7936B63FEECCFCF3992 /* TableMetricPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65EE4CFD8EBA5998E84950BF /* TableMetricPresentationTests.swift */; };
+		EB9F948DB26CA67B943A561E /* BulkEndButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB947E1460A99CFA3DF9536 /* BulkEndButton.swift */; };
 		F4ECCC087F5272D8B82F01C9 /* NetworkSpeedMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B150D96F4C9C22D9AAEA38 /* NetworkSpeedMonitor.swift */; };
 		F6B9E3F87B13378EB143A00E /* MacKitCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C2612EAD74D290B03C7FF56 /* MacKitCore */; };
 /* End PBXBuildFile section */
@@ -180,6 +181,7 @@
 		FC8EF5980DB41D2DACA3956A /* ProcessRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRowView.swift; sourceTree = "<group>"; };
 		FCC5BECB625CB85960ABB67F /* DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md; sourceTree = "<group>"; };
 		FF430A08157A1D7CFD4CB8C3 /* cell-6.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "cell-6.png"; sourceTree = "<group>"; };
+		FFB947E1460A99CFA3DF9536 /* BulkEndButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkEndButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -398,6 +400,7 @@
 		B18543ABBDDDD9687916DBE4 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				FFB947E1460A99CFA3DF9536 /* BulkEndButton.swift */,
 				A94F55F63A88AE752A0EB3E7 /* MonitorTableRowChrome.swift */,
 				E4EAA800ED194C26B6F745FB /* NetworkRowView.swift */,
 				17987A2E3AF40CB15C1DEAD0 /* NetworkTableView.swift */,
@@ -633,6 +636,7 @@
 				B94063D52A87091DE2DE55FA /* AppDelegate.swift in Sources */,
 				A7473BC53D78595079A24DD3 /* AppPreferences.swift in Sources */,
 				D9AC7B7FCCA4373488EA5EFF /* ArgumentCache.swift in Sources */,
+				EB9F948DB26CA67B943A561E /* BulkEndButton.swift in Sources */,
 				1447D5BF06875ED84BDE6811 /* CPUTime.swift in Sources */,
 				9F34ACA51C38B26690838543 /* CompactPanel.swift in Sources */,
 				0F243E7C6409663A0E5C59B2 /* DisplayClassifier.swift in Sources */,
@@ -725,7 +729,7 @@
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SHZQ3MWP3B;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -741,7 +745,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
@@ -897,7 +901,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SHZQ3MWP3B;
 				ENABLE_HARDENED_RUNTIME = NO;
@@ -919,7 +923,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

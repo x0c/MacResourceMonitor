@@ -37,6 +37,7 @@ nonisolated struct ProcessRow: Identifiable, Sendable, Hashable {
     var displayName: String
     var bundlePath: String?
     var iconPath: String?
+    var executablePath: String
     /// 结束与存活检测必须用 PID+启动时刻，避免 SIGTERM 等待期间 PID 复用误杀。
     var memberIdentities: [ProcessIdentity]
     var cpuPercent: Double
@@ -46,4 +47,14 @@ nonisolated struct ProcessRow: Identifiable, Sendable, Hashable {
     var isSystemProtected: Bool
 
     var memberPIDs: [pid_t] { memberIdentities.map(\.pid) }
+    var canEnd: Bool { isCurrentUser && !isSystemProtected }
+
+    var revealPath: String {
+        switch kind {
+        case .desktopApp, .chatgpt:
+            return bundlePath ?? executablePath
+        case .cursorAgent, .pi, .corral, .namedTool, .other:
+            return executablePath
+        }
+    }
 }

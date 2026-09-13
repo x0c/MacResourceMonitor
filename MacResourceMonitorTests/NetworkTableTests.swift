@@ -158,6 +158,7 @@ final class NetworkTableRankingTests: XCTestCase {
             displayName: name,
             bundlePath: nil,
             iconPath: nil,
+            executablePath: "/tmp/\(name)",
             memberIdentities: [ProcessIdentity(pid: pid, startTime: 1)],
             cpuPercent: 0,
             memoryPercent: 0,

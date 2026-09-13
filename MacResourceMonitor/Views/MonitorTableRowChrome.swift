@@ -7,6 +7,7 @@ struct MonitorTableRowChrome<Metrics: View>: View {
     let displayName: String
     let iconPath: String?
     let bundlePath: String?
+    let revealPath: String
     let canEnd: Bool
     let isSystemProtected: Bool
     let isCurrentUser: Bool
@@ -39,6 +40,20 @@ struct MonitorTableRowChrome<Metrics: View>: View {
         .padding(.horizontal, 6)
         .frame(height: 26)
         .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                revealInFinder()
+            } label: {
+                Label(String(localized: "table.revealInFinder"), systemImage: "folder")
+            }
+            .disabled(revealURL == nil)
+
+            Button {
+                copyName()
+            } label: {
+                Label(String(localized: "table.copyName"), systemImage: "doc.on.doc")
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
@@ -50,13 +65,27 @@ struct MonitorTableRowChrome<Metrics: View>: View {
         return NSWorkspace.shared.icon(for: .unixExecutable)
     }
 
+    private var revealURL: URL? {
+        guard FileManager.default.fileExists(atPath: revealPath) else { return nil }
+        return URL(fileURLWithPath: revealPath)
+    }
+
+    private func revealInFinder() {
+        guard let revealURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([revealURL])
+    }
+
+    private func copyName() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(displayName, forType: .string)
+    }
+
     @ViewBuilder
     private var endButton: some View {
-        let enabled = canEnd
-        Button(action: onEnd) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(enabled && hoveringEnd ? Color.red : Color.secondary)
+          let enabled = canEnd
+          Button(action: onEnd) {
+              EndButtonIcon(isHighlighted: enabled && hoveringEnd)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)

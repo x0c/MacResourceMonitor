@@ -77,6 +77,47 @@ final class ProcessTableRankingTests: XCTestCase {
         XCTAssertEqual(ProcessTableRanking.percentText(68.8), "68.8%")
     }
 
+    func testBulkEndCandidatesKeepOnlyEndableRowsAndExcludeMonitor() {
+        let rows = [
+            makeRow(name: "Endable", cpu: 1, memory: 1, pid: 101),
+            makeRow(name: "Protected", cpu: 1, memory: 1, pid: 102, isSystemProtected: true),
+            makeRow(name: "Other User", cpu: 1, memory: 1, pid: 103, isCurrentUser: false),
+            makeRow(name: "Mac Resource Monitor", cpu: 1, memory: 1, pid: 104)
+        ]
+
+        let candidates = ProcessTerminationSelection.bulkCandidates(
+            from: rows,
+            excludingPID: 104
+        )
+
+        XCTAssertEqual(candidates.map(\.displayName), ["Endable"])
+    }
+
+    func testBulkEndCandidatesDeduplicateRows() {
+        let row = makeRow(name: "Endable", cpu: 1, memory: 1, pid: 101)
+        let candidates = ProcessTerminationSelection.bulkCandidates(
+            from: [row, row],
+            excludingPID: 999
+        )
+        XCTAssertEqual(candidates.count, 1)
+    }
+
+    func testRevealPathUsesAppBundleForDesktopApps() {
+        var row = makeRow(name: "Example", cpu: 1, memory: 1)
+        row.kind = .desktopApp
+        row.bundlePath = "/Applications/Example.app"
+        row.executablePath = "/Applications/Example.app/Contents/MacOS/Example"
+        XCTAssertEqual(row.revealPath, "/Applications/Example.app")
+    }
+
+    func testRevealPathUsesExecutableForCommandLineTools() {
+        var row = makeRow(name: "Example Tool", cpu: 1, memory: 1)
+        row.kind = .namedTool
+        row.bundlePath = "/Applications/Python.app"
+        row.executablePath = "/usr/local/bin/example-tool"
+        XCTAssertEqual(row.revealPath, "/usr/local/bin/example-tool")
+    }
+
     func testPinnedRowStaysAtIndexWhenRankingWouldMoveIt() {
         let rows = [
             makeRow(name: "A", cpu: 15, memory: 1),
@@ -195,18 +236,26 @@ final class ProcessTableRankingTests: XCTestCase {
         XCTAssertEqual(model.sortColumn, .memory)
     }
 
-    private func makeRow(name: String, cpu: Double, memory: Double) -> ProcessRow {
+    private func makeRow(
+        name: String,
+        cpu: Double,
+        memory: Double,
+        pid: pid_t = 1,
+        isSystemProtected: Bool = false,
+        isCurrentUser: Bool = true
+    ) -> ProcessRow {
         ProcessRow(
             id: name,
             displayName: name,
             bundlePath: nil,
             iconPath: nil,
-            memberIdentities: [ProcessIdentity(pid: 1, startTime: 1)],
+            executablePath: "/tmp/\(name)",
+            memberIdentities: [ProcessIdentity(pid: pid, startTime: 1)],
             cpuPercent: cpu,
             memoryPercent: memory,
             kind: .other,
-            isCurrentUser: true,
-            isSystemProtected: false
+            isCurrentUser: isCurrentUser,
+            isSystemProtected: isSystemProtected
         )
     }
 }

@@ -6,8 +6,9 @@ struct NetworkTableView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
+              header
+                  .zIndex(1)
+              Divider()
             ScrollView {
                 if model.visibleRows.isEmpty {
                     ContentUnavailableView(
@@ -69,7 +70,9 @@ struct NetworkTableView: View {
             Spacer(minLength: 8)
             sortHeader(column: .upload, title: String(localized: "table.column.upload"))
             sortHeader(column: .download, title: String(localized: "table.column.download"))
-            Color.clear.frame(width: AppPreferences.endColumnWidth)
+            BulkEndButton(candidates: model.bulkEndCandidates) { candidates in
+                Task { await model.endAll(candidates) }
+            }
         }
         .padding(.horizontal, 6)
         .frame(height: 22)

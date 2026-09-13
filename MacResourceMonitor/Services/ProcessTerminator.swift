@@ -1,4 +1,3 @@
-import AppKit
 import Darwin
 import Foundation
 
@@ -8,20 +7,37 @@ nonisolated enum TerminationOutcome: Sendable {
     case blocked
 }
 
+nonisolated enum ProcessTerminationSelection {
+    static func bulkCandidates(from rows: [ProcessRow], excludingPID: pid_t) -> [ProcessRow] {
+        var seenRowIDs: Set<String> = []
+        return rows.filter { row in
+            row.canEnd
+                && !row.memberPIDs.contains(excludingPID)
+                && seenRowIDs.insert(row.id).inserted
+        }
+    }
+}
+
 @MainActor
 enum ProcessTerminator {
     /// 全应用共用：进程表与网络表可能同时点结束，避免重叠 PID 并发发信号。
     private static var inFlightIdentities: Set<ProcessIdentity> = []
 
     static func end(_ row: ProcessRow) async -> TerminationOutcome {
-        if row.isSystemProtected {
-            return .blocked
-        }
-        if !row.isCurrentUser {
-            return .blocked
-        }
+        guard row.canEnd else { return .blocked }
+        return await forceEnd(row.memberIdentities)
+    }
 
-        let targets = row.memberIdentities
+    static func endAll(_ rows: [ProcessRow]) async -> TerminationOutcome {
+        let candidates = ProcessTerminationSelection.bulkCandidates(
+            from: rows,
+            excludingPID: getpid()
+        )
+        let targets = Array(Set(candidates.flatMap(\.memberIdentities)))
+        return await forceEnd(targets)
+    }
+
+    private static func forceEnd(_ targets: [ProcessIdentity]) async -> TerminationOutcome {
         guard !targets.isEmpty else { return .ended }
         guard targets.allSatisfy({ !inFlightIdentities.contains($0) }) else {
             return .blocked
@@ -35,11 +51,8 @@ enum ProcessTerminator {
             }
         }
 
-        switch row.kind {
-        case .desktopApp, .chatgpt:
-            await endApplication(row, targets: targets)
-        case .cursorAgent, .pi, .corral, .namedTool, .other:
-            await endInterpreter(targets)
+        for identity in targets where shouldSignal(identity) {
+            _ = kill(identity.pid, SIGKILL)
         }
 
         try? await Task.sleep(for: .milliseconds(200))
@@ -48,38 +61,6 @@ enum ProcessTerminator {
             return .ended
         }
         return .failed(String(localized: "table.end.failed"))
-    }
-
-    private static func endApplication(_ row: ProcessRow, targets: [ProcessIdentity]) async {
-        var apps: [NSRunningApplication] = []
-        if let bundlePath = row.bundlePath {
-            let url = URL(fileURLWithPath: bundlePath)
-            apps = NSWorkspace.shared.runningApplications.filter { $0.bundleURL == url }
-        }
-        if apps.isEmpty {
-            apps = targets.compactMap { identity in
-                guard isSameProcess(identity) else { return nil }
-                return NSRunningApplication(processIdentifier: identity.pid)
-            }
-        }
-        for app in apps {
-            _ = app.terminate()
-        }
-        try? await Task.sleep(for: .milliseconds(700))
-        for app in apps where !app.isTerminated {
-            _ = app.forceTerminate()
-        }
-        await endInterpreter(targets)
-    }
-
-    private static func endInterpreter(_ identities: [ProcessIdentity]) async {
-        for identity in identities where shouldSignal(identity) {
-            kill(identity.pid, SIGTERM)
-        }
-        try? await Task.sleep(for: .milliseconds(500))
-        for identity in identities where shouldSignal(identity) {
-            kill(identity.pid, SIGKILL)
-        }
     }
 
     /// 仍是当初那只进程，且不是系统保护目标，才允许发信号。

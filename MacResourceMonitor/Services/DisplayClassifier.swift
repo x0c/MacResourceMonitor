@@ -139,6 +139,7 @@ nonisolated enum DisplayClassifier {
             displayName: display,
             bundlePath: bundle,
             iconPath: icon,
+            executablePath: lead.path,
             memberIdentities: members.map(\.identity),
             cpuPercent: cpu,
             memoryPercent: memoryPercent,

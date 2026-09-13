@@ -56,7 +56,7 @@ graph TD
     J --> A
     A --> K[ProcessListModel.end]
     K --> L[ProcessTerminator.end]
-    L --> M[正常结束 / 强制结束 / 失败提示]
+    L --> M[单项或确认后的批量强制结束 / 失败提示]
     M --> B
 ```
 
@@ -143,17 +143,19 @@ sequenceDiagram
 
 ### 2.6 结束安全边界与终止顺序
 
-`ProcessTableView` 将每行的结束动作交给 `ProcessListModel.end()`，后者清除旧错误、调用 `ProcessTerminator.end()`，仅将失败结果写入 `lastError`，然后无条件刷新。
+`ProcessTableView` 将每行的结束动作交给 `ProcessListModel.end()`；CPU / 内存表与网络表的表头 `×` 则先由 `BulkEndButton` 固定一份候选快照并显示二次确认，确认后分别交给两张表的 `endAll()`。候选只包含当前用户、非系统保护且不含 Mac Resource Monitor 自身的行；没有候选时表头按钮置灰。
 
 结束器先阻止两类行：系统保护行，以及任何成员并非当前用户的行。被阻止是预期安全结果，不显示为执行失败。同一批成员身份若已有结束进行中（含网络表与进程表交叉），再次结束返回阻止，避免并发发信号。
 
-允许结束的桌面应用和 ChatGPT 行先按运行中的应用执行正常终止；短暂等待后，对仍未结束的应用强制终止；最后再对该行成员走解释器终止流程。Cursor Agent、pi、Corral、具名工具和普通进程直接走解释器终止流程：先向仍存活且启动时刻仍匹配的成员发 SIGTERM，等待，再向仍匹配的成员发 SIGKILL。每发信号前复读路径并跳过系统保护目标。结束后再次按 PID+启动时刻检测成员是否存活；都已消失才是 `ended`，否则将本地化失败文案交给表内提示。
+单行与批量结束都直接向候选成员发送 SIGKILL，不再先请求正常退出，也不在发信号前等待。每发信号前仍复核 PID+启动时刻与当前可执行路径，并跳过系统保护目标。批量动作先去重成员身份，再用与单行相同的全局互斥一次发送；发送后的短暂等待只用于确认结果，不会推迟强制结束。成员都已消失才是 `ended`，否则将本地化失败文案交给表内提示。
 
 ### 2.7 表内呈现与可访问性
 
-`ProcessTableView` 只渲染 `model.visibleRows`，顶部放冻结开关、CPU/内存汇总列和不可排序的结束列占位。未冻结时当前排序列为主色，另一列为次要色；冻结时列头都不强调排序。每行由 `ProcessRowView` 显示图标、人话名、CPU、内存和结束符号。
+`ProcessTableView` 只渲染 `model.visibleRows`，顶部放冻结开关、CPU/内存汇总列和结束列圆形 `×`；网络表使用同一结束列表头。表头必须复用行内圆形结束符号的视觉，不使用裸 `×`。表头 `×` 只在存在可结束候选时可用；点击时固定候选快照，并在当前浮层内部稳定显示无系统蓝框的二次确认，显示候选行数量和未保存内容风险，取消不执行。确认不得依赖会让菜单栏浮层失焦的独立弹窗或弹出窗口。未冻结时当前排序列为主色，另一列为次要色；冻结时列头都不强调排序。每行由 `ProcessRowView` 显示图标、人话名、CPU、内存和结束符号。
 
 结束符号是简洁的关闭图标，而不是文字按钮；仅在可结束且悬停时变红。系统保护或非当前用户行的控件禁用并给出对应帮助说明。行的无障碍文案包含人话名、CPU 与内存百分比；按钮也有无障碍名称和限制原因。
+
+每个 CPU / 内存行和网络行的整行右键菜单都由共享行外观提供两个动作：桌面应用优先在访达中选中对应 `.app`，命令行工具选中实际可执行文件；目标路径不存在时仅禁用该项。复制名称始终复制当前显示的人话名，不复制 PID、包名或路径。右键不得触发结束或改变冻结状态。
 
 ## §2.5 物理路径速查
 
@@ -161,7 +163,7 @@ sequenceDiagram
 |---|---|---|
 | `MacResourceMonitor/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`，7 个文件 |
 | `MacResourceMonitor/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
-| `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、结束触发和悬停钉位入口 | `ProcessTableView.swift`、`ProcessRowView.swift`，2 个文件 |
+| `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、单项/批量结束触发、确认、行右键和悬停钉位入口 | `ProcessTableView.swift`、`ProcessRowView.swift`、`NetworkRowView.swift`、`MonitorTableRowChrome.swift`、`BulkEndButton.swift`，5 个核心文件 |
 | `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护和 CPU 上限的回归测试 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`，2 个文件 |
 | `docs/` | 本域产品行为权威契约及本知识库 | `PRODUCT_CONTRACT.md` 与本文件，2 个文件 |
 
@@ -176,8 +178,8 @@ sequenceDiagram
 | 修改责任 PID 取得方式 | 系统责任归属 | `MacResourceMonitor/Services/Responsibility.swift` · `pidResponsible(for:)` | 动态读取责任 PID，失败时退回当前 PID。 |
 | 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `MacResourceMonitor/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
 | 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
-| 修改结束权限、正常结束、强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()` | 依据行种类与安全标记结束成员 PID。 |
-| 修改表头、冻结开关或排序点击 | 表格视图 | `MacResourceMonitor/Views/ProcessTableView.swift` · `ProcessTableView.body`、`sortHeader()` | 连接主状态与表头互动，不承担采样计算。 |
+| 修改结束权限、单项/批量强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()`、`endAll()` | 复核成员身份与安全标记后直接强制结束。 |
+| 修改表头、批量结束确认、冻结开关或排序点击 | 表格视图 | `MacResourceMonitor/Views/ProcessTableView.swift`、`NetworkTableView.swift`、`BulkEndButton.swift` | 连接主状态与表头互动，并固定确认时的批量候选快照。 |
 | 修改结束图标、禁用状态、悬停或行内视觉 | 行视图 | `MacResourceMonitor/Views/ProcessRowView.swift` · `endButton`、`helpText()` | 只把当前行状态映射到 UI 与回调。 |
 | 修改归类、保护和口径后的回归保护 | 分类测试 | `MacResourceMonitorTests/DisplayClassifierTests.swift` | 覆盖 ChatGPT、Cursor Agent、pi、Corral、独立工具、保护行和 CPU 上限。 |
 | 修改排序、空闲筛选或钉位后的回归保护 | 排名测试 | `MacResourceMonitorTests/ProcessTableRankingTests.swift` | 覆盖 CPU/内存降序、忙碌筛选、百分比格式和钉位更新。 |
@@ -214,7 +216,8 @@ sequenceDiagram
 - **AI 易错点**【禁止】把 CPU 改成单核或累计 CPU 时间 -> 必须保持两次采样的 Δ(user+system) / (墙钟秒 × 逻辑核数) × 100，并限制在 0–100%（原因：产品展示的是整机逻辑核占比，且与菜单栏指标同口径）。
 - **AI 易错点**【禁止】将每一行 `memoryPercent` 相加写进表头 -> 必须继续读取系统级物理内存占比（原因：行模型是可见责任对象的 physical footprint 聚合，无法代表整机已占用内存）。
 - **AI 易错点**【禁止】用 PID 单独作为缓存或 CPU 历史身份 -> 必须使用 PID 加启动时间的 `ProcessIdentity`（原因：PID 会复用，旧参数和旧样本会错误附着到新进程）。
-- **AI 易错点**【禁止】结束流程只按 PID 发 SIGTERM/SIGKILL -> 必须在等待前后用启动时刻核对仍是同一进程，并跳过仍被判为系统保护的目标（原因：等待窗口内 PID 复用或误折进应用行的系统助手会被误杀）。
+- **AI 易错点**【禁止】结束流程只按 PID 发 SIGKILL -> 必须在每次发信号前用启动时刻核对仍是同一进程，并跳过仍被判为系统保护的目标（原因：PID 复用或误折进应用行的系统助手会被误杀）。
+- **AI 易错点**【禁止】为了保留“礼貌退出”重新加回 SIGTERM 或应用正常退出等待 -> 单行和批量都必须立即发送 SIGKILL；结果核验等待不得放在信号发送之前（原因：本产品的结束动作已明确裁定为强制结束）。
 - **AI 易错点**【禁止】把系统保护进程按责任 PID 折进桌面应用行 -> `rowKey` 必须让保护进程独立成行（原因：结束应用时的成员信号会连带打到系统助手）。
 - **AI 易错点**【禁止】把 argv0 等于可执行短名当成「具名工具」hint -> `toolHint` 必须跳过该情况（原因：WindowServer 等短名会误放开分类边界）。
 - **AI 易错点**【禁止】从 Unix 父子关系直接画进程树或把一切孩子都折叠 -> 必须通过责任 PID、包路径、参数和明确的家族规则形成平表（原因：产品不做进程树，且 Cursor 启动的独立工具不能被折进 Cursor）。
@@ -230,6 +233,7 @@ sequenceDiagram
 - 【隐性语义】`ArgumentCache` 仅在某一 `ProcessIdentity` 第一次出现时读取参数，并在快照完成后按存活身份清理；新增参数识别规则不能改成每秒读取全机参数。
 - 【禁止】将系统保护只按展示名称判断 -> 必须保留 PID、保护名称和系统路径三类保护线索，且路径须覆盖 `/System/`、`/usr/libexec/`、`/usr/sbin/`、`/sbin/`（原因：WindowServer 等短名可能被误判为普通具名工具；`/usr/sbin` 不在旧前缀里）。
 - 【禁止】把失败的结束结果吞掉 -> 必须让 `ProcessListModel.end()` 写入本地化失败信息并刷新（原因：用户需要知道仍有成员存活，而不是误以为已结束）。
+- 【禁止】表头批量结束不确认、点后因浮层失焦没有可见反馈、确认后重新读取新名单、或把本应用一起结束 -> 点击时固定候选快照，在当前浮层内显示无蓝框确认层，取消零副作用；确认只处理该快照且排除 Mac Resource Monitor 自身。表头复用行内圆形 `×` 样式。
 - 【消歧】行内存占比 vs 系统内存占比：前者属于 `ProcessRow`，是可见责任对象成员的 physical footprint；后者属于 `ProcessListModel`，是 host VM 的整机口径。两者不能互传或相加。
 - 【消歧】列表冻结 vs 结束行钉位：前者冻结整份名单以便用户定位；后者只在结束符号悬停期间保持一行位置，数值依旧刷新。两者不可互相替代。
 
@@ -265,8 +269,9 @@ xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme Ma
 2. 表头 CPU 与内存均显示整机汇总；关闭刷新后名单停住，但表头汇总仍随时间变化；收起面板后名单不在后台更新。
 3. 分别点击 CPU 和内存列，顺序只会从高到低切换；再次点击同一列不出现升序。
 4. 将鼠标停在某行结束符号上并等待刷新，该行保持位置但数字可更新；移开或行消失后，排序恢复且无幽灵行。
-5. 选择一个明确属于当前用户、可安全结束的测试进程，确认先正常结束、必要时强制结束，随后名单刷新；不要把系统进程、其他用户进程或重要工作进程当验收样本。
-6. 验证系统保护行和其他用户行的结束符号不可用，并显示正确限制说明。
+5. 选择一个明确属于当前用户、可安全结束的临时测试进程，确认单项点击立即强制结束，不出现正常退出等待；不要把系统进程、其他用户进程或重要工作进程当验收样本。
+6. 点击表头 `×`，确认弹窗显示当前候选数量与未保存内容风险；先取消并确认没有进程被结束。批量确认只用专门启动的无害测试进程做受控验收，禁止拿用户正在工作的应用做样本。
+7. 验证系统保护行和其他用户行的结束符号不可用，Mac Resource Monitor 自身不进入批量候选，并显示正确限制说明。
 
 真实菜单栏呈现和真实结束操作尚待每次影响本域的改动当次验证；本知识库不把历史构建或单测当成替代证据。
 

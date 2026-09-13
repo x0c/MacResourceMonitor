@@ -415,6 +415,24 @@
         }
       }
     },
+    "common.cancel": {
+      "comment": "Cancel button",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
     "table.end": {
       "comment": "End process button",
       "extractionState": "manual",
@@ -483,6 +501,132 @@
           "stringUnit": {
             "state": "translated",
             "value": "没能结束这个进程。"
+          }
+        }
+      }
+    },
+    "table.endAll": {
+      "comment": "Bulk force-end button in the table header",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force end all listed processes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制结束列表中所有可结束进程"
+          }
+        }
+      }
+    },
+    "table.endAll.confirm": {
+      "comment": "Confirmation button for bulk force-end",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force End All"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部强制结束"
+          }
+        }
+      }
+    },
+    "table.endAll.confirmation.message": {
+      "comment": "Warning shown before bulk force-end",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsaved changes may be lost. Mac Resource Monitor and protected processes will stay open."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未保存的内容可能丢失。Mac Resource Monitor 和受保护进程会保持运行。"
+          }
+        }
+      }
+    },
+    "table.endAll.confirmation.title": {
+      "comment": "Bulk force-end confirmation title; parameter is the number of process rows",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force end %d processes?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制结束 %d 个进程？"
+          }
+        }
+      }
+    },
+    "table.endAll.failed": {
+      "comment": "Some processes survived bulk force-end",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some processes could not be ended."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有些进程未能结束。"
+          }
+        }
+      }
+    },
+    "table.copyName": {
+      "comment": "Process row context menu item that copies the displayed name",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Name"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制名称"
+          }
+        }
+      }
+    },
+    "table.revealInFinder": {
+      "comment": "Process row context menu item that reveals the app or executable",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal in Finder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示"
           }
         }
       }

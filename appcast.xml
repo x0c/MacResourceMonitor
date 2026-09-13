@@ -1,8 +1,19 @@
-<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>Mac Resource Monitor</title>
+        <item>
+            <title>1.1.1</title>
+            <pubDate>Sun, 13 Sep 2026 11:12:21 +0800</pubDate>
+            <link>https://github.com/x0c/MacResourceMonitor</link>
+            <sparkle:version>35</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/x0c/MacResourceMonitor/releases/download/v1.1.1/Mac-Resource-Monitor-1.1.1.zip" length="3720032" type="application/octet-stream" sparkle:edSignature="yi5xRYhLWdByKn8+mju1y8YVUWuIQ2FQy92NJB5+nbjQ+vG5BqrTdj+kDIkJq/axwAMHyiHgxjuI+iePxtqlAQ=="/>
+        </item>
         <item>
             <title>1.1.0</title>
             <pubDate>Tue, 08 Sep 2026 14:17:49 +0800</pubDate>
@@ -10,10 +21,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:version>34</sparkle:version>
             <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/x0c/MacResourceMonitor/releases/download/v1.1.0/Mac-Resource-Monitor-1.1.0.zip" length="3678906" type="application/octet-stream" sparkle:edSignature="kmOQzsphlENE91HpYnwZqP91UcRrzHLGFPzBTW9voJfa9/M5+CgqOs6dqNvXeJdPU/wi3NW4FgwhhHKL9MIpCg=="></enclosure>
+            <enclosure url="https://github.com/x0c/MacResourceMonitor/releases/download/v1.1.0/Mac-Resource-Monitor-1.1.0.zip" length="3678906" type="application/octet-stream" sparkle:edSignature="kmOQzsphlENE91HpYnwZqP91UcRrzHLGFPzBTW9voJfa9/M5+CgqOs6dqNvXeJdPU/wi3NW4FgwhhHKL9MIpCg=="/>
         </item>
     </channel>
-</rss><!-- sparkle-signatures:
-edSignature: y1oXxAFK0+z4X3n6tu27ALaAzEOvRPPHKpEeKFKBcra4SXHOYRA7CQcoUM60LEGMdQZ8Xumqrm8tYf9Bal59DQ==
-length: 1138
+</rss>
+<!-- sparkle-signatures:
+edSignature: SxTUm5VRELYmJ6n1O6JV0C4aLFUejXUAzhp2kx+S2lmiofPyGG53KLk1sym/nDclkoraD69od6Qi+mcIjgbcDQ==
+length: 1816
 -->

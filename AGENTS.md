@@ -102,7 +102,7 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 - **CPU**：Δ(user+system)/(墙钟秒×逻辑核)×100，上限 100%。Apple Silicon 须乘 timebase。
 - **内存**：物理占用账本/物理内存×100，不要 resident。
 - **CPU 外环**：无效样本保留上一帧；真实 0% 仍空环。
-- **结束**：`.app` → `terminate`/`forceTerminate`；解释器 SIGTERM/SIGKILL。只结束当前用户；系统进程禁止一键杀。WindowServer 等 argv0=短名禁止当具名工具放开。
+- **结束**：单行与表头批量都直接 SIGKILL；表头 `×` 必须二次确认并排除本应用。只结束当前用户；系统进程禁止一键杀；每次发信号前仍按 PID+启动时刻与路径复核身份。WindowServer 等 argv0=短名禁止当具名工具放开。
 - **无系统蓝框**；开机自启默认关（三态）；登录静默（`LoginLaunchDetector` + `MenuBarReopenPolicy`）。
 - **公开仓脱敏**：禁止内网地址、本机绝对用户路径进 GitHub。
 
