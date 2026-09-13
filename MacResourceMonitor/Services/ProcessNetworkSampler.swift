@@ -1,18 +1,37 @@
 import Foundation
 
-/// 使用系统自带 nettop 的一秒差分计算实时速率；应用启动后后台预热，不依赖网络表是否展开。
+/// Per-process network rates from a long-lived `nettop` stream (mac-stats / iStat pattern).
+/// Session starts while the network table is visible or during startup warmup, then stops.
 actor ProcessNetworkSampler {
+    private let stream = NettopStreamSampler()
+
+    func prepare() {
+        stream.start()
+    }
+
+    func shutdown() {
+        stream.stop()
+    }
+
+    func resetBaseline() {
+        // nettop `-d` emits self-contained per-second deltas; no client-side baseline.
+    }
+
+    /// True once the stream has published at least one real delta frame (not the baseline).
+    var hasFrame: Bool { stream.hasFrame }
+
     func sample() async -> [pid_t: ProcessNetworkRate] {
-        let output = await Task.detached(priority: .utility) {
-            Self.nettopRates()
-        }.value
-        return Self.parse(output).reduce(into: [:]) { rates, entry in
-            let (pid, counters) = entry
-            guard counters.received > 0 || counters.sent > 0 else { return }
-            rates[pid] = ProcessNetworkRate(
-                receivedBytesPerSecond: Double(counters.received),
-                sentBytesPerSecond: Double(counters.sent)
-            )
+        prepare()
+        return stream.latestRatesSnapshot()
+    }
+
+    /// Wait briefly for the first delta frame after start (baseline + one second).
+    func waitForFirstFrame(timeoutSeconds: Double = 2.5) async {
+        prepare()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(timeoutSeconds))
+        while ContinuousClock.now < deadline {
+            if stream.hasFrame { return }
+            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 
@@ -29,24 +48,5 @@ actor ProcessNetworkSampler {
             counters[pid_t(pidNumber)] = (received, sent)
         }
         return counters
-    }
-
-    private nonisolated static func nettopRates() -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        // -d 输出区间增量；两帧、每秒一帧，首帧作基线、第二帧就是一秒速率。
-        task.arguments = ["-d", "-P", "-L", "2", "-s", "1", "-x", "-n", "-J", "bytes_in,bytes_out"]
-        let output = Pipe()
-        task.standardOutput = output
-        task.standardError = FileHandle.nullDevice
-        do {
-            try task.run()
-        } catch {
-            return ""
-        }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard task.terminationStatus == 0 else { return "" }
-        return String(data: data, encoding: .utf8) ?? ""
     }
 }

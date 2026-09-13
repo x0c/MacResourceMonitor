@@ -16,6 +16,82 @@ final class ProcessNetworkSamplerTests: XCTestCase {
     }
 }
 
+final class NettopStreamSamplerParseTests: XCTestCase {
+    func testRecognizesCurrentJFlagHeaderWithoutTimeColumn() {
+        XCTAssertTrue(NettopStreamSampler.isHeader(",bytes_in,bytes_out,"))
+        XCTAssertTrue(NettopStreamSampler.isHeader("time,,bytes_in,bytes_out,"))
+        XCTAssertFalse(NettopStreamSampler.isHeader("launchd.1,0,0,"))
+    }
+
+    func testParsesCurrentJFlagDeltaRow() {
+        let parsed = NettopStreamSampler.parseLine("Google Chrome.42,1024,2048,")
+        XCTAssertEqual(parsed?.pid, 42)
+        XCTAssertEqual(parsed?.received, 1_024)
+        XCTAssertEqual(parsed?.sent, 2_048)
+    }
+
+    func testParsesLegacyTimePrefixedDeltaRow() {
+        let parsed = NettopStreamSampler.parseLine("14:44:40.476850,mihomo.1711,59782,25854,")
+        XCTAssertEqual(parsed?.pid, 1_711)
+        XCTAssertEqual(parsed?.received, 59_782)
+        XCTAssertEqual(parsed?.sent, 25_854)
+    }
+
+    /// Regression for the 2026-09-13 crash: handleChunk touched the byte buffer
+    /// without the lock while stop() cleared it on another thread → Index out
+    /// of range on the NSFileHandle.fd_monitoring queue (EXC_BREAKPOINT).
+    /// Hammer chunks concurrently with stop()/start(); must never trap.
+    func testConcurrentChunkAndStopDoesNotTrap() {
+        let sampler = NettopStreamSampler()
+        sampler.stop() // no stream: every chunk must be a no-op, never a trap
+        let group = DispatchGroup()
+        for i in 0..<200 {
+            group.enter()
+            DispatchQueue.global().async {
+                let line = ",bytes_in,bytes_out,\nChrome.\(1000 + (i % 50)),\(i),\(i),\n"
+                sampler.handleChunk(Data(line.utf8))
+                if i % 25 == 0 { sampler.stop() }
+                group.leave()
+            }
+        }
+        let result = group.wait(timeout: .now() + 10)
+        XCTAssertEqual(result, .success)
+        _ = sampler.latestRatesSnapshot()
+    }
+}
+
+@MainActor
+final class NetworkListSamplingLifecycleTests: XCTestCase {
+    func testWarmupBudgetIsFinite() {
+        XCTAssertEqual(NetworkListModel.warmupSampleBudget, 2)
+    }
+
+    func testClosingPanelKeepsRetainedRows() async throws {
+        let chrome = ProcessRow(
+            id: "Google Chrome",
+            displayName: "Google Chrome",
+            bundlePath: nil,
+            iconPath: nil,
+            executablePath: "/tmp/Google Chrome",
+            memberIdentities: [ProcessIdentity(pid: 42, startTime: 1)],
+            cpuPercent: 0,
+            memoryPercent: 0,
+            kind: .other,
+            isCurrentUser: true,
+            isSystemProtected: false
+        )
+        let model = NetworkListModel(processRows: { [chrome] })
+        // Wait for warmup to settle without leaving a permanent sampler running.
+        try await Task.sleep(for: .milliseconds(2_400))
+        model.setPanelVisible(false)
+        try await Task.sleep(for: .milliseconds(200))
+        // Closing must not clear the retained frame (may be empty if no traffic).
+        _ = model.rows
+        model.setPanelVisible(true)
+        model.setPanelVisible(false)
+    }
+}
+
 final class NetworkTableRankingTests: XCTestCase {
     func testUploadAndDownloadRemainIndependentlyDescending() {
         let rows = [

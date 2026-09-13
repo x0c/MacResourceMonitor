@@ -151,7 +151,7 @@ graph TD
 | `MacResourceMonitor/StatusItem/` | 状态项、动态双环和网速绘制、浮层、锚定、点外关闭 | `StatusItemController.swift`、`CompactPanel.swift`、`PanelPlacement.swift`、`PanelDismiss.swift`、`MenuBarIconRenderer.swift` |
 | `MacResourceMonitor/App/` | 显示偏好、设置窗、开机自启的应用层入口 | `AppPreferences.swift`、`SettingsWindowController.swift`、`LaunchAtLoginManager.swift` |
 | `MacResourceMonitor/Views/` | 恢复窗口与两张平表、无蓝框焦点呈现 | `SettingsView.swift`、`ProcessTableView.swift`、`NetworkTableView.swift` |
-| `MacResourceMonitor/Services/` | 默认出口网卡、总网速与按进程网络速率采样 | `NetworkSpeedMonitor.swift`、`ProcessNetworkSampler.swift`、`NetworkListModel.swift` |
+| `MacResourceMonitor/Services/` | 默认出口网卡、总网速与按进程网络速率采样 | `NetworkSpeedMonitor.swift`、`ProcessNetworkSampler.swift`、`NettopStreamSampler.swift`、`NetworkListModel.swift` |
 | `MacResourceMonitorTests/` | 锚定、点外关闭、网速格式、入口命中和网络表排序的自动回归 | `PanelPlacementTests.swift`、`NetworkSpeedMonitorTests.swift`、`NetworkTableTests.swift`、`DisplayClassifierTests.swift` |
 | `Configuration/` | 构建与运行环境配置；不是本领域的业务偏好来源 | 配置文件 |
 
@@ -207,17 +207,23 @@ graph TD
 - 【禁止】以 `MenuBarExtra` 代替左键主路径；圆环与网速必须是两个独立 `NSStatusItem`（圆环只开 CPU/内存表，网速只开网络表且默认 Download 降序）；先建网速项再建圆环项以固定「圆环在左」。禁止叠透明子视图或从 `NSApp.currentEvent` 切坐标（原因：菜单栏局部命中不可靠，已多次错送）。
 - 【禁止】用 `NSClickGestureRecognizer` 的右键 `buttonMask` 接状态项右键；状态栏按钮会吞事件，右键常完全无菜单。左右键一律 `sendAction(on: [.leftMouseUp, .rightMouseUp])`，右键临时挂 `menu` + `performClick` 后卸掉（与 MacKitStatusItem / HandySwitch 同构）。
 - **AI 易错点**【锚定 / 点外】实现须符合全局锚定与保留区规则；本产品入口：`StatusItemController.buttonScreenFrame()`、`PanelPlacement.isMenuBarAnchor()`、`AppDelegate.showPanelBelowStatusItem()`、`PanelDismiss.shouldHide()`。
-- 【隐性依赖】面板显示状态必须通过 `CompactPanel.onVisibilityChange` 回传给 `ProcessListModel` / `NetworkListModel` → CPU/内存表收起时停止写入可见名单；网络表后台继续预热最近一帧（原因：列表冻结与菜单栏双环不是同一开关；网络表要预热）。
+- 【隐性依赖】面板显示状态必须通过 `CompactPanel.onVisibilityChange` 回传给 `ProcessListModel` / `NetworkListModel` → CPU/内存表收起时停止写入可见名单；网络表收起时保留最近一帧并停止高耗按进程采样，展开后再按约一秒节奏更新（原因：列表冻结与菜单栏双环不是同一开关；「预热」= 首帧 + 保留帧，不是常驻每秒采）。
 - 【隐性依赖】网络表必须复用进程表的责任对象、图标和结束限制 -> 按成员进程汇总系统 `nettop` 的上下行速率，结束仍走同一条安全结束边界；不得改成裸 PID 列表（原因：否则会把同一应用拆散，或绕过系统进程与其他用户的保护）。
 - 【节奏锁定】网络表使用 `nettop` 的一秒差分（首帧只做基线、第二帧产出速率），每帧完成后立即开始下一次读取 -> 禁止用两次独立累计快照或额外两秒等待（原因：网络表会明显落后菜单栏读数，像两套互不相干的监视器）。
 - **【已确认性能缺陷 2026-09-13】后台网络采样会持续拉高 CPU 并触发风扇**：本机安装版 1.1.1（build 35）在面板未打开时，Mac Resource Monitor 持续派生 `/usr/bin/nettop -d -P -L 2 -s 1 -x -n -J bytes_in`。现场连续观测到这些短命 `nettop` 子进程约占 40%–134% CPU，应用本体同时约占 5%–35%；退出应用后派生进程立即消失。该现象已与 Spotlight、备份传输本身分离验证，不能归因成系统老化或正常的后台预热。修复时须保留“网络表打开即有最近一帧”的体验，但禁止继续以每秒新建高开销系统进程实现预热；可改用可复用的长生命周期采样器或其他低开销来源，最终方案须以真机能耗证据决定，本文不预先钉死实现。
-- 【首开状态】**禁止**打开网络表时展示「正在读取」加载屏。收起后保留最近一帧；应用启动后后台预热；采样完成但没有流量时显示「当前没有网络占用」。预热尚未交出首帧且确实空名单时，也只显示空态，不要加载占位（原因：用户要求点开即流畅）。
+- **【能耗机理与方案排序 2026-09-13 · 调研】** 根因不只是「派生子进程」，而是 `NetworkListModel` 启动后永不按面板可见性停采，且每次采样用 `nettop -L 2 -s 1`（墙钟约 1 秒才能出第二帧差分）；循环按 1 秒截止，采样本身已吃满该窗口 → **空闲间隙接近 0，等于常年满载跑网络统计**。本机微基准：单次 `-L 2 -s 1` 约 1.02s real、0.30s user + 1.10s sys（约 1.4 核·秒/拍）；连续 `-L 3` 长驻同样约 1.4 核占用——**只改成长生命周期 `nettop` 不够，开着表时仍会风扇狂转**。菜单栏整机上下行走网卡计数（轻量）；CPU/内存双环依赖的全机进程采样约 1.5s 一拍且面板收起已不写可见名单——不是本次风扇主因。`proc_pid_rusage` **没有**可用的按进程网络字节；权威低开销来源是内核 `com.apple.network.statistics`（`nettop` 同源，见 netpeek / XNU `ntstat`），进程内订阅后按秒查累计再差分。
+  - **P0（立刻止血，保功能）**：收起网络表 → 停止按进程网络采样，**保留最近一帧**；展开 → 立即恢复约 1 秒节奏并先画保留帧（禁止加载屏）。启动仍可做**有限次**预热拿到首帧后停，禁止「后台永远每秒采」。产品契约里的「后台预热」解释为：首帧就绪 + 收起保留 + 再开无空白，**不是**常驻高耗采样。验收：面板收起 ≥60s 无 `nettop`/等价高耗子进程，风扇不被本应用拖起；再开仍立刻有名单或空态。
+  - **P1（打开表时也极致降耗 · 2026-09-13 已落地）**：按 mac-stats / iStat 成熟做法，用 **PTY 上长驻 `nettop -d -P -L 0 -s 1 -J bytes_in,bytes_out`**（`NettopStreamSampler`）取代每秒 fork；Pipe 无 TTY 时 `nettop` 会缓冲不吐行，必须用 PTY。当前 macOS 在 `-J` 下表头是 `,bytes_in,bytes_out,`、行是 `name.pid,in,out,`（**没有** `time` 列）——按 `time,` 解析会永远空表（2026-09-13 空态事故）。首帧是 `-d` 基线，第二帧起才是速率；打开/预热须等首个有效差分帧。`NetworkListModel` 仅在面板可见或有限次启动预热时拉起流，收起后保留最近一帧并 `stop()`。菜单栏仍走默认出口网卡计数；网络表走 nettop per-PID，两者不保证逐字节相等，但表内必须与 nettop 一致。
+  - **P2（可选微调）**：若仍要「久置后台略刷新」以免极旧帧，仅允许**稀疏心跳**（数十秒级）且须有能耗证据；禁止回到 1 秒后台。菜单栏读数变化不大时跳过重绘、进程表收起时少做图标/归类等属次要增益，勿先动。
+  - **禁止当解**：关「显示网速」就停整机网速采样；为降占用取消首帧/保留帧导致首开空白或加载屏；用抓包/root；把打开态刷新拉到数秒破坏与菜单栏同拍。
+- 【首开状态】**禁止**打开网络表时展示「正在读取」加载屏。收起后保留最近一帧；启动尽快拿到首帧后停止高耗后台连采；采样完成但没有流量时显示「当前没有网络占用」。尚无首帧且确实空名单时，也只显示空态，不要加载占位（原因：用户要求点开即流畅）。
 - **AI 易错点**【网络名单闪烁】某一拍上下行都为 0 时不得立刻踢出该责任行 -> `NetworkListPresence` 必须对刚有过流量的行保留约 15 秒（显示 `0 KB/s`），进程已不在责任名单时才立即移除（原因：Chrome 等应用经常某一秒没包，秒级踢出再进入会让用户以为名单坏了；借鉴同类监视器的时间保持，而不是额外迟滞）。
 - **AI 易错点**【冻结边界】打开列表冻结（Freeze / 冻结）时，名单顺序与成员尽量不动，但**行内占用数字必须继续刷新**；不得停止 `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、网速采样或表头整机汇总；点列头排序须自动关冻结（原因：冻结是对准结束，不是冻住读数；双环和全机读数必须持续反映真实系统）。
 - **AI 易错点**【网速来源】网速不是所有网卡字节的总和 -> `NetworkSpeedMonitor` 只读当前默认路由接口，并在接口变化时清除基线、先显示无样本（原因：切换 Wi-Fi、以太网或 VPN 时累加或沿用旧数都会制造假流量）。
 - **AI 易错点**【网速显示开关】关闭“显示网速”不能调用 `NetworkSpeedMonitor.stop()`，也不能影响双环、左键或其他菜单项 -> 只改 `MenuBarDisplayPreferences.showsNetworkSpeed` 后重绘（跨产品原则见全局「显示开关 ≠ 停采样」）。
 - 【排版锁定】`MenuBarIconRenderer.drawNetworkSpeed()` 的上行永远在上并显示 `↑`，下行永远在下并显示 `↓` -> 若视觉位置颠倒，修纵向基线或布局边界，不得交换两个读数或箭头掩盖问题（原因：方向语义不能由大小或坐标猜测）。
 - 【排版锁定】每次读数以较大方向选共同 `KB/s`、`MB/s` 或 `GB/s`，另一行不足共同单位显示 `<1`；数字与本行单位留固定 2pt 间隔，顺序固定为数字、单位、箭头 -> 不得把单位拆跨行、只显示 K/M/G、把 `<1` 四舍五入成 `1`，或强行让两行数字右对齐（原因：可读性与方向映射都有明确口径）。
+- **【排坑 2026-09-13 · nettop 长驻流闪退】**`NettopStreamSampler` 的字节缓冲与帧状态必须全程持同一把 `NSLock` 进出：`handleChunk`（`NSFileHandle.fd_monitoring` 后台队列）与 `stop()`（主线程经面板收起 / 预热结束调用）曾各锁一半——前者无锁读写 `buffer`，后者清缓冲——收起面板瞬间崩溃报告 `EXC_BREAKPOINT` + `Index out of range`，栈顶 `NettopStreamSampler.handleChunk` 第 124 行。修法：整块 chunk 的追加、分行、解析、发布放在同一临界区内原子完成；`stop()` 在锁内只做 `task=nil` + 状态清零，把 `closeFile()` 移到锁外（锁内关会冲出末回调重入 `handleChunk` 自死锁，并留下 PPID=1 空转约 130% CPU 的孤儿 nettop）。`stop()` 后到的迟包按 `task == nil` 丢弃。回归见 `NettopStreamSamplerParseTests.testConcurrentChunkAndStopDoesNotTrap`。
 - **【排错结论 2026-09-05】网速刷新抖动与左侧大空白**：外框固定且只按紧凑上限预留（数字列 `999` + `KB/s`/`MB/s`/`GB/s` 最宽者）；格式化不得吐四位整数（满 `1000` 升单位）；只在状态项重建时设固定长度，刷新只换图像；短读数空位只在数字列左侧。跨产品「勿按字形每次改 length / 勿过大防抖预留」见全局；本条是本产品紧凑上限数字。
 - **【排错结论 2026-09-05】双环/网速跟邻图标黑白不一致，或圆环被裁成 Wi‑Fi 弧**：黑白由系统按模板图上色，禁止手猜深浅色。动态重绘须先栅格成位图再 `isTemplate`；位图上下文禁止再 `scaleBy(Retina)`（会放大裁切）。权威在全局 `macos-appkit-gotchas` / `MACOS_APP_DEVELOPMENT_GUIDE`；本产品入口 `MenuBarIconRenderer.makeTemplateImage`。
 - 【排版锁定】较快方向数字+单位 **9.5pt**，较慢 **7.5pt**；箭头始终 **8.5pt**；两方向相同或缺样本时两行恢复 8.5pt。改字号必须仍让两行可见字形分别贴齐共同 17pt 布局框的上、下边缘，并保持双环垂直中线（原因：速度对比不能造成菜单栏跳动或假对齐）。禁止交换读数/箭头修倒置。

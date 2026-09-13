@@ -87,10 +87,14 @@ nonisolated enum NetworkListPresence {
 }
 
 /// 网络表与 CPU/内存表共享责任进程、图标和结束边界，只替换两列实时速率。
+/// 收起后保留最近一帧并停止采样；启动只做有限次预热，禁止后台常驻高耗采集。
 @MainActor
 @Observable
 final class NetworkListModel {
     static let defaultSortColumn: NetworkSortColumn = .download
+    /// Startup samples after the first nettop delta frame is ready.
+    static let warmupSampleBudget = 2
+
     private(set) var rows: [NetworkProcessRow] = []
     private(set) var lastError: String?
     var sortColumn: NetworkSortColumn = defaultSortColumn
@@ -98,6 +102,8 @@ final class NetworkListModel {
     private let processRows: @MainActor () -> [ProcessRow]
     private var listLoop: Task<Void, Never>?
     private var isRefreshing = false
+    private var panelVisible = false
+    private var warmupRemaining = NetworkListModel.warmupSampleBudget
     private var pinnedRowID: String?
     private var pinnedIndex: Int?
     private var unpinTask: Task<Void, Never>?
@@ -126,7 +132,7 @@ final class NetworkListModel {
             legacyKey: AppPreferences.legacyNetworkRefreshEnabledKey,
             defaultValue: AppPreferences.networkListFrozenDefault
         )
-        start()
+        applyRunState()
     }
 
     var visibleRows: [NetworkProcessRow] {
@@ -152,9 +158,11 @@ final class NetworkListModel {
     }
 
     func setPanelVisible(_ visible: Bool) {
+        panelVisible = visible
         if !visible {
             clearPin()
         }
+        applyRunState()
     }
 
     func setEndHover(_ hovering: Bool, rowID: String) {
@@ -197,15 +205,53 @@ final class NetworkListModel {
         await refresh()
     }
 
+    private var shouldSample: Bool {
+        panelVisible || warmupRemaining > 0
+    }
+
+    private func applyRunState() {
+        if shouldSample {
+            start()
+        } else {
+            stop()
+        }
+    }
+
     private func start() {
+        // Keep the existing task if one is still winding down; finishLoop restarts when needed.
         guard listLoop == nil else { return }
         listLoop = Task { [weak self] in
+            await self?.sampler.prepare()
+            await self?.sampler.resetBaseline()
+            // First `-d` frame is baseline; wait for the first real delta before painting.
+            await self?.sampler.waitForFirstFrame()
             while !Task.isCancelled {
-                let deadline = ContinuousClock.now.advanced(by: .seconds(AppPreferences.networkRefreshInterval))
-                await self?.refresh()
-                guard !Task.isCancelled else { break }
+                guard let self, self.shouldSample else { break }
+                let deadline = ContinuousClock.now.advanced(
+                    by: .seconds(AppPreferences.networkRefreshInterval)
+                )
+                await self.refresh()
+                if self.warmupRemaining > 0 {
+                    self.warmupRemaining -= 1
+                }
+                guard !Task.isCancelled, self.shouldSample else { break }
                 try? await Task.sleep(until: deadline, clock: .continuous)
             }
+            await self?.sampler.shutdown()
+            await MainActor.run { [weak self] in
+                self?.finishLoop()
+            }
+        }
+    }
+
+    private func stop() {
+        listLoop?.cancel()
+    }
+
+    private func finishLoop() {
+        listLoop = nil
+        if shouldSample {
+            start()
         }
     }
 
@@ -227,6 +273,10 @@ final class NetworkListModel {
         holdUntil = presence.holdUntil
 
         let nextRows = presence.rows
+        // Keep the retained frame when a baseline-only sample returns empty rates.
+        if nextRows.isEmpty, !rows.isEmpty, sampledRates.isEmpty {
+            return
+        }
         if rows.isEmpty {
             rows = nextRows
         } else if listFrozen {

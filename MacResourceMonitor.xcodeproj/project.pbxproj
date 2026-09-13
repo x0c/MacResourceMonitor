@@ -41,6 +41,7 @@
 		B2DF19722433F68452104FC7 /* ProcessRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC8EF5980DB41D2DACA3956A /* ProcessRowView.swift */; };
 		B94063D52A87091DE2DE55FA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5711A598EB37C8B9BF4A3EEC /* AppDelegate.swift */; };
 		BBBB97419B7633DF853749F4 /* MacKitLaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 195C72B5E22415F3CBD017D8 /* MacKitLaunchAtLogin */; };
+		BF05C2F5298C943EDA3C0CBD /* NettopStreamSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F79FC193DCEB2115B960618 /* NettopStreamSampler.swift */; };
 		CF7A2EDED4C351379F10A4EF /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3CD43B818FCA2E1109A6EE /* StatusItemController.swift */; };
 		D0D4EA567F442FF0C6991D4D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB1F00F7629901D9842037C2 /* Assets.xcassets */; };
 		D7C51FB75E206F67641C4F63 /* ProcessTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B8AF491A551356FD14A4E0 /* ProcessTableView.swift */; };
@@ -115,6 +116,7 @@
 		68B390710E007CBE17F0E13D /* memory-01-slash.svg */ = {isa = PBXFileReference; path = "memory-01-slash.svg"; sourceTree = "<group>"; };
 		6D2CDAE65EEDA0C4A5FFB8EF /* AppIcon-1024-48px.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon-1024-48px.png"; sourceTree = "<group>"; };
 		6D72F552AFBEF0363FB5809F /* signature-01-cleave.svg.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "signature-01-cleave.svg.png"; sourceTree = "<group>"; };
+		6F79FC193DCEB2115B960618 /* NettopStreamSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NettopStreamSampler.swift; sourceTree = "<group>"; };
 		7169885ED3874B35A5AEF9E4 /* directions-3x3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "directions-3x3.png"; sourceTree = "<group>"; };
 		75FFC0C67C748EC53756E171 /* cell-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "cell-2.png"; sourceTree = "<group>"; };
 		7842C484948A7FAEEB28DBDC /* signature-02-burnout.svg */ = {isa = PBXFileReference; path = "signature-02-burnout.svg"; sourceTree = "<group>"; };
@@ -417,6 +419,7 @@
 				32CA3CFBBC1D00558B069DFE /* ArgumentCache.swift */,
 				9A9D2C9C0426C22C12F81C0B /* CPUTime.swift */,
 				E90CF3D0942573F96D33FCA6 /* DisplayClassifier.swift */,
+				6F79FC193DCEB2115B960618 /* NettopStreamSampler.swift */,
 				A48076A01B7E9368E10BCA78 /* NetworkListModel.swift */,
 				92B150D96F4C9C22D9AAEA38 /* NetworkSpeedMonitor.swift */,
 				A5C5A6BE936EA40F0AA67576 /* ProcessListModel.swift */,
@@ -644,6 +647,7 @@
 				7182E05431D523E2485EAF36 /* MacResourceMonitorApp.swift in Sources */,
 				3498E9E3CBAF501EF080043F /* MenuBarIconRenderer.swift in Sources */,
 				61183FEC8A5AC24AD2D4B515 /* MonitorTableRowChrome.swift in Sources */,
+				BF05C2F5298C943EDA3C0CBD /* NettopStreamSampler.swift in Sources */,
 				91D9CF32489B6FA64244ADC8 /* NetworkListModel.swift in Sources */,
 				380EB574753487BF0A69ED22 /* NetworkProcessRow.swift in Sources */,
 				A6F2C032CF6F695E6130469D /* NetworkRowView.swift in Sources */,
@@ -729,7 +733,7 @@
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 38;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SHZQ3MWP3B;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -745,7 +749,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				OTHER_CODE_SIGN_FLAGS = "--timestamp";
@@ -901,7 +905,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 38;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SHZQ3MWP3B;
 				ENABLE_HARDENED_RUNTIME = NO;
@@ -923,7 +927,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

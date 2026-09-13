@@ -77,7 +77,7 @@ If this unstuck a Mac, a star on the repo helps other people find it.
 - Whole-machine CPU % (capped at 100%) and physical memory %
 - One-click end for your own processes; system processes stay listed but cannot be killed
 - Freeze toggle (English **Freeze** / Chinese **冻结**, off by default) keeps row order steady while numbers keep updating; tapping a column header sorts and turns Freeze off; hovering End pins that row
-- Network list is prewarmed in the background—no loading screen when you open it; quiet processes stay at `0 KB/s` briefly instead of flickering out
+- Network list keeps a recent frame and avoids a loading screen; heavy per-process sampling stops while the panel is closed; quiet processes stay at `0 KB/s` briefly instead of flickering out
 - Menu bar dual ring keeps updating even when the table is closed or frozen
 
 ## Not in scope
