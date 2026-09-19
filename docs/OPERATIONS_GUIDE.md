@@ -59,6 +59,7 @@ open '/Applications/Mac Resource Monitor.app'
 | 菜单栏应用「消失」 | 图标被藏、恢复窗未出 | 从应用程序 / Spotlight 再开，确认恢复窗 |
 | 悬停结束符号瞬间闪退 | 崩溃报告 `SIGABRT` + `_swift_reportExclusivityConflict`，栈在钉位悬停 | 先算可见索引再改钉位；见进程监控知识库 §2.5 与 `_standards/.../macos-appkit-gotchas.md` |
 | 收起网络表 / 预热结束瞬间闪退 | 崩溃报告 `EXC_BREAKPOINT` + `Index out of range`，栈顶 `NettopStreamSampler.handleChunk` 第 124 行（`fd_monitoring` 队列） | 长驻 nettop 流的缓冲必须全程持锁，`stop()` 的 `closeFile()` 移锁外；见菜单栏知识库【排坑 2026-09-13】 |
+| 进程表顶上两行黑图标名叫「0」、各约 17% CPU、内存 0 | 本应用留下的按进程网速采样已脱离，参数 `0` 被当成名字 | 先停掉无主采样；退出必须同步停采；启动清残留；见菜单栏知识库【排坑 2026-09-19】 |
 | 右键菜单栏图标完全没反应 | 左键仍开表；拆双状态项后用手势识别右键 | 改回 `sendAction` 左右键抬起 + 临时挂菜单；见菜单栏知识库路径三排错结论 |
 
 ## 未替代的验收

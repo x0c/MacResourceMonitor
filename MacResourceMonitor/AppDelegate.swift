@@ -113,7 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let commaMonitor {
             NSEvent.removeMonitor(commaMonitor)
         }
+        networkListModel.stopSamplingNow()
         networkSpeedMonitor.stop()
+        NettopStreamSampler.reapOrphanedSamplers()
     }
 
     func requestTermination() {

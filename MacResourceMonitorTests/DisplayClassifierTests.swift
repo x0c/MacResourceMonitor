@@ -174,6 +174,38 @@ final class DisplayClassifierTests: XCTestCase {
         )
     }
 
+    func testNetworkSamplerIsNotNamedZeroAndFoldsIntoMonitor() {
+        let arguments = [
+            "/usr/bin/nettop", "-d", "-P", "-L", "0", "-s", "1", "-x", "-n",
+            "-J", "bytes_in,bytes_out"
+        ]
+        XCTAssertNil(
+            DisplayClassifier.toolHint(
+                path: "/usr/bin/nettop",
+                arguments: arguments,
+                executableName: "nettop"
+            )
+        )
+        let app = makeProcess(
+            pid: 90,
+            path: "/Applications/Mac Resource Monitor.app/Contents/MacOS/Mac Resource Monitor",
+            arguments: ["Mac Resource Monitor"]
+        )
+        let sampler = makeProcess(
+            pid: 91,
+            ppid: 1,
+            path: "/usr/bin/nettop",
+            arguments: arguments
+        )
+        let rows = DisplayClassifier.rows(from: [app, sampler], currentUID: 501, physicalMemory: 16 << 30)
+        XCTAssertFalse(rows.contains { $0.displayName == "0" })
+        XCTAssertEqual(rows.filter { $0.displayName == "Mac Resource Monitor" }.count, 1)
+        XCTAssertEqual(
+            rows.first { $0.displayName == "Mac Resource Monitor" }?.memberPIDs.sorted(),
+            [90, 91]
+        )
+    }
+
     func testCPUPercentIsCappedAtOneHundred() {
         let value = CPUTime.percent(tickDelta: 1_000_000_000_000, wallSeconds: 1, logicalCores: 8)
         XCTAssertLessThanOrEqual(value, 100)

@@ -35,10 +35,11 @@ actor ProcessSampler {
     private let logicalCores: Int
     private let physicalMemory: UInt64
 
-    init() {
-        self.logicalCores = max(ProcessInfo.processInfo.processorCount, 1)
-        self.physicalMemory = Self.readPhysicalMemory()
-    }
+            init() {
+                self.logicalCores = max(ProcessInfo.processInfo.processorCount, 1)
+                self.physicalMemory = Self.readPhysicalMemory()
+                NettopStreamSampler.reapOrphanedSamplers()
+            }
 
     var memoryBytes: UInt64 { physicalMemory }
 

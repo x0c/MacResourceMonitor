@@ -9,6 +9,13 @@ import Foundation
 ///   `name.pid,bytes_in,bytes_out,`
 /// (no `time` column). First `-d` frame is a baseline; real rates start on the second.
 nonisolated final class NettopStreamSampler: @unchecked Sendable {
+    static let executablePath = "/usr/bin/nettop"
+    /// `-d` = per-interval deltas; `-L 0` = stream forever; PTY required (Pipe buffers forever).
+    static let arguments = [
+        "-d", "-P", "-L", "0", "-s", "1", "-x", "-n",
+        "-J", "bytes_in,bytes_out"
+    ]
+
     private let lock = NSLock()
     private var task: Process?
     private var masterHandle: FileHandle?
@@ -21,7 +28,18 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
     private var headersSeen = 0
     private var hasPublishedFrame = false
 
+    deinit {
+        stop()
+    }
+
     func start() {
+        lock.lock()
+        let alreadyRunning = task != nil
+        lock.unlock()
+        guard alreadyRunning == false else { return }
+
+        Self.reapOrphanedSamplers()
+
         lock.lock()
         defer { lock.unlock() }
         guard task == nil else { return }
@@ -34,12 +52,8 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         let slaveHandle = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        // `-d` = per-interval deltas; `-L 0` = stream forever; PTY required (Pipe buffers forever).
-        process.arguments = [
-            "-d", "-P", "-L", "0", "-s", "1", "-x", "-n",
-            "-J", "bytes_in,bytes_out"
-        ]
+        process.executableURL = URL(fileURLWithPath: Self.executablePath)
+        process.arguments = Self.arguments
         process.standardInput = slaveHandle
         process.standardOutput = slaveHandle
         process.standardError = FileHandle.nullDevice
@@ -96,13 +110,83 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         try? dyingSlave?.close()
 
         guard let dyingTask else { return }
-        dyingTask.terminate()
         let pid = dyingTask.processIdentifier
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.5) {
-            if dyingTask.isRunning {
-                _ = Darwin.kill(pid, SIGKILL)
-            }
+        dyingTask.terminate()
+        // Must reap before this process exits. An async follow-up SIGKILL is
+        // lost on quit / coverage-install, leaving PPID=1 spinners named "0".
+        let deadline = Date().addingTimeInterval(0.2)
+        while dyingTask.isRunning, Date() < deadline {
+            usleep(20_000)
         }
+        if dyingTask.isRunning {
+            _ = Darwin.kill(pid, SIGKILL)
+        }
+    }
+
+    /// Kill leftover samplers from a previous instance (quit, crash, overlay install).
+    static func reapOrphanedSamplers(keeping pidToKeep: pid_t? = nil) {
+        let selfPID = getpid()
+        let uid = getuid()
+        for pid in listPIDs() {
+            if pid == selfPID { continue }
+            if let pidToKeep, pid == pidToKeep { continue }
+            guard let executable = processPath(for: pid), isSamplerExecutable(executable) else { continue }
+            let meta = processMeta(for: pid)
+            guard meta.uid == uid else { continue }
+            guard isSamplerProcess(path: executable, arguments: ProcessArguments.read(pid: pid)) else { continue }
+            let isOrphan = meta.ppid <= 1
+            let isForeignMonitorChild: Bool = {
+                guard meta.ppid > 1, meta.ppid != selfPID else { return false }
+                guard let parentPath = processPath(for: meta.ppid) else { return true }
+                return parentPath.contains("/Mac Resource Monitor.app/")
+            }()
+            guard isOrphan || isForeignMonitorChild else { continue }
+            _ = Darwin.kill(pid, SIGKILL)
+        }
+    }
+
+    static func isSamplerExecutable(_ path: String) -> Bool {
+        URL(fileURLWithPath: path).lastPathComponent == "nettop"
+    }
+
+    static func isSamplerProcess(path: String, arguments: [String]) -> Bool {
+        isSamplerExecutable(path) && matchesSamplerArguments(arguments)
+    }
+
+    static func matchesSamplerArguments(_ arguments: [String]) -> Bool {
+        let flags: [String]
+        if let first = arguments.first, URL(fileURLWithPath: first).lastPathComponent == "nettop" {
+            flags = Array(arguments.dropFirst())
+        } else {
+            flags = arguments
+        }
+        return flags == Self.arguments
+    }
+
+    private static func listPIDs() -> [pid_t] {
+        let count = proc_listallpids(nil, 0)
+        guard count > 0 else { return [] }
+        var buffer = [pid_t](repeating: 0, count: Int(count) * 2)
+        let filled = proc_listallpids(&buffer, Int32(buffer.count * MemoryLayout<pid_t>.size))
+        guard filled > 0 else { return [] }
+        return Array(buffer.prefix(Int(filled)))
+    }
+
+    private static func processPath(for pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return buffer.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+    }
+
+    private static func processMeta(for pid: pid_t) -> (ppid: pid_t, uid: uid_t) {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else {
+            return (0, 0)
+        }
+        return (info.kp_eproc.e_ppid, info.kp_eproc.e_ucred.cr_uid)
     }
 
     func latestRatesSnapshot() -> [pid_t: ProcessNetworkRate] {

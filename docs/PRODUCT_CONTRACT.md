@@ -80,6 +80,7 @@
 | `pi` | **单独一行 pi** | 只结束这一只 |
 | Corral（解释器短名常是 Python；本机常见是 Homebrew 自带的 Python.app） | **Corral**，不是 Python | 结束 Corral 自己；**不杀** tmux 保活里的其它助手 |
 | `mcp-server-memory` | **不占行**，跟父家 | 随父家一起结束 |
+| 本应用为网络表拉起的按进程网速采样 | **折进 Mac Resource Monitor**，禁止显示成 `0` 或无名黑图标 | 随本应用结束；收起网络表和退出后不得再留着空转 |
 
 从终端、iTerm、Cursor 里拉起的独立命令单独占行，不折进 Cursor.app。Cursor 的图形窗口仍是单独一行。Homebrew 那种 Python.app **不是**桌面应用家，禁止把 Corral 显示成 Python。
 

@@ -55,7 +55,7 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 - [~/Codes/_standards/swift.md](~/Codes/_standards/swift.md)：新建、评审或改造本 macOS 应用前**必读**。不读会偏离 Swift 6 并发基线和覆盖安装闭环。
 - [~/Codes/_standards/workspace-docs/swift-docs/macos-app-baseline.md](~/Codes/_standards/workspace-docs/swift-docs/macos-app-baseline.md)：脚手架、评审完整度、补分发/开机自启/设置窗前**必读**。不读会把「第一波能跑」当成完成，或把未对外发行的暂缓当成可以永久不做。
 - [~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md](~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md)：改人话名、责任进程、整机 CPU%、折行规则前**必读**。不读会做成进程树或按 Unix 父进程建树。
-- [app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改、评审或排查实时占用、人话名、排序、刷新、结束权限、终止流程或结束失败提示前**必读**。不读会把整机口径、平表聚合或安全结束边界改错，或把失败提示做成一直占着的红条。
+- [app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改、评审或排查实时占用、人话名、排序、刷新、结束权限、终止流程、结束失败提示，或名单顶上名叫「0」的黑图标行前**必读**。不读会把整机口径、平表聚合或安全结束边界改错，或把失败提示做成一直占着的红条，或把本应用留下的网速采样显示成无名高占用。
 - [app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏左右键、浮层锚定、网速、后台网络采样、`nettop` 高占用、风扇狂转、隐藏图标、恢复窗口、开机自启、退出、拖底边改高度或列表高度记忆前**必读**。不读会让左键误弹菜单、面板掉到角落、隐藏后无稳定入口，把采样子进程的高 CPU 漏算成系统负载，或把列表高度做成拖过屏幕底、拖动中途写盘、下次打开忘掉。
 - [app-macos/docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)：改、评审或排查构建、签名、公证、应用内更新、GitHub Release、Homebrew，或公开仓 **GitHub About / Topics / README 门面检索**前**必读**。不读会把工程源、版本、签名链或公开发行边界改坏，或只改 README 却声称站内 SEO 已完成、用「进程表」当检索词、把近失当成搜不到去改名。
 - [app-macos/docs/OPERATIONS_GUIDE.md](~/Codes/MacResourceMonitor/app-macos/docs/OPERATIONS_GUIDE.md)：构建、测试、启动、覆盖安装、浮层截图验收或排查本机开发环境前**必读**。不读会在错误仓根构建、误把测试通过当安装验收、覆盖错误版本，或因状态栏浮层截不到图而误判界面没出来。
@@ -130,7 +130,7 @@ open "/Applications/Mac Resource Monitor.app"
 - [docs/PRODUCT_CONTRACT.md](docs/PRODUCT_CONTRACT.md)：改任何用户可见行为前必读。不读会改掉已锁体验。
 - 本机 overlay / 玻璃 / 图标 / 本地化 / 设置项：`~/Codes/_standards/workspace-docs/swift-docs/`。
 - 进程身份：`~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md`。
-- [docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改占用/人话名/结束或结束失败提示前必读。不读会把失败提示做成一直占着的红条。
+- [docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改占用/人话名/结束或结束失败提示，或排查名单顶上名叫「0」的黑图标行前必读。不读会把失败提示做成一直占着的红条，或把本应用留下的网速采样显示成无名高占用。
 - [docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏、浮层、网速、后台网络采样、`nettop` 高占用、风扇狂转、拖底边改高度或列表高度记忆前**必读**。不读会把采样子进程的高 CPU 漏算成系统负载，为了首开无加载屏而每秒启动高开销进程，或把列表高度做成拖过屏幕底、拖动中途写盘、下次打开忘掉。
 - [docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md](docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)：改构建/签名/公证/更新，或改公开仓 **GitHub About / Topics / README 门面检索**前**必读**。不读会只改 README 却声称站内 SEO 已完成，或用「进程表」当检索词、把近失当成搜不到去改名。
 - [docs/OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md)：本地构建/覆盖安装/浮层截图排障前必读。

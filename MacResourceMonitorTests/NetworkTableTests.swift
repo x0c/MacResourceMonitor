@@ -58,6 +58,26 @@ final class NettopStreamSamplerParseTests: XCTestCase {
         XCTAssertEqual(result, .success)
         _ = sampler.latestRatesSnapshot()
     }
+
+    func testSamplerArgumentSignatureIgnoresArgv0() {
+        XCTAssertTrue(
+            NettopStreamSampler.matchesSamplerArguments(
+                ["/usr/bin/nettop"] + NettopStreamSampler.arguments
+            )
+        )
+        XCTAssertTrue(NettopStreamSampler.matchesSamplerArguments(NettopStreamSampler.arguments))
+        XCTAssertFalse(
+            NettopStreamSampler.matchesSamplerArguments(
+                ["/usr/bin/nettop", "-d", "-P", "-L", "2", "-s", "1"]
+            )
+        )
+        XCTAssertTrue(
+            NettopStreamSampler.isSamplerProcess(
+                path: "/usr/bin/nettop",
+                arguments: ["/usr/bin/nettop"] + NettopStreamSampler.arguments
+            )
+        )
+    }
 }
 
 @MainActor

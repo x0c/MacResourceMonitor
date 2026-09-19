@@ -246,6 +246,14 @@ final class NetworkListModel {
         }
     }
 
+    func stopSamplingNow() {
+        warmupRemaining = 0
+        panelVisible = false
+        listLoop?.cancel()
+        listLoop = nil
+        sampler.stopSync()
+    }
+
     private func stop() {
         listLoop?.cancel()
     }

@@ -3,13 +3,17 @@ import Foundation
 /// Per-process network rates from a long-lived `nettop` stream (mac-stats / iStat pattern).
 /// Session starts while the network table is visible or during startup warmup, then stops.
 actor ProcessNetworkSampler {
-    private let stream = NettopStreamSampler()
+    private nonisolated(unsafe) let stream = NettopStreamSampler()
 
     func prepare() {
         stream.start()
     }
 
     func shutdown() {
+        stream.stop()
+    }
+
+    nonisolated func stopSync() {
         stream.stop()
     }
 

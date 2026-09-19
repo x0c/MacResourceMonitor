@@ -60,6 +60,8 @@ nonisolated enum DisplayClassifier {
             if base.isEmpty { continue }
             if token.hasPrefix("-") { continue }
             if base.contains("=") { continue }
+            if base.contains(",") { continue }
+            if base.allSatisfy(\.isNumber) { continue }
             if isInterpreterName(base) { continue }
             // argv0 常等于短名（WindowServer 等）；那不是「具名脚本」，跳过以免放开结束边界。
             if base == executableName { continue }
@@ -82,10 +84,17 @@ nonisolated enum DisplayClassifier {
 
     private static func rowKey(for process: RawProcess, byPID: [pid_t: RawProcess]) -> String {
         // 系统保护进程禁止折进桌面应用行，否则结束应用时会连带 SIGKILL。
-        if isProtected(name: process.executableName, path: process.path, pid: process.pid) {
-            return "proc:\(process.pid)"
-        }
-        if isChatGPTFamily(process, byPID: byPID) {
+          if isProtected(name: process.executableName, path: process.path, pid: process.pid) {
+              return "proc:\(process.pid)"
+          }
+          if NettopStreamSampler.isSamplerProcess(path: process.path, arguments: process.arguments) {
+              if let host = byPID.values.first(where: { $0.path.contains("/Mac Resource Monitor.app/") }),
+                 let bundle = appBundlePath(in: host.path) {
+                  return "app:\(bundle)"
+              }
+              return "proc:\(process.pid)"
+          }
+          if isChatGPTFamily(process, byPID: byPID) {
             return "chatgpt"
         }
         if isCursorAgent(process, byPID: byPID) {
