@@ -255,9 +255,10 @@ release_notes_file="${work_dir}/release-notes.md"
 cat > "${release_notes_file}" <<EOF
 Mac Resource Monitor ${version}
 
+- Drag the bottom edge of the process list to change its height. The height is remembered the next time you open it, and it will not go past the bottom of the visible screen.
+- End-failure notices are quiet and disappear after a few seconds instead of staying on the table in red.
 - Click the menu-bar rings for the CPU and memory list, or click upload/download for the matching network-activity list.
 - Network activity refreshes every second, stays in step with the menu-bar readings, and never opens to a blank panel.
-- The active connection is detected automatically; right-click Show Network Speed hides or restores the readings and remembers the choice.
 EOF
 
 appcast_dir="${work_dir}/appcast"

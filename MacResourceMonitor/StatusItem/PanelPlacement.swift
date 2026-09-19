@@ -11,6 +11,54 @@ nonisolated enum PanelPlacement {
         menuBarEdge(for: rect, screens: screens) != nil
     }
 
+    static func maxHeight(
+        anchor: NSRect?,
+        screens: [NSRect],
+        visibleScreens: [NSRect],
+        fallbackVisible: NSRect
+    ) -> CGFloat {
+        let gap: CGFloat = 6
+        let margin: CGFloat = 8
+        if let anchor,
+           let edge = menuBarEdge(for: anchor, screens: screens) {
+            let visible = visibleScreen(containing: anchor, screens: screens, visibles: visibleScreens) ?? fallbackVisible
+            switch edge {
+            case .top:
+                return max(0, anchor.minY - gap - (visible.minY + margin))
+            case .bottom:
+                return max(0, visible.maxY - (anchor.maxY + gap))
+            }
+        }
+        return max(0, fallbackVisible.height - gap - margin)
+    }
+
+    static func fittedSize(
+        preferredHeight: CGFloat,
+        minHeight: CGFloat,
+        width: CGFloat,
+        anchor: NSRect?,
+        screens: [NSRect],
+        visibleScreens: [NSRect],
+        fallbackVisible: NSRect
+    ) -> CGSize {
+        let maximum = maxHeight(
+            anchor: anchor,
+            screens: screens,
+            visibleScreens: visibleScreens,
+            fallbackVisible: fallbackVisible
+        )
+        let height = min(max(preferredHeight, minHeight), maximum)
+        return CGSize(width: width, height: max(height, 0))
+    }
+
+    /// Top menu bar: the far edge is the bottom, so height grows downward.
+    static func growsDownward(anchor: NSRect?, screens: [NSRect]) -> Bool {
+        guard let anchor, let edge = menuBarEdge(for: anchor, screens: screens) else {
+            return true
+        }
+        return edge == .top
+    }
+
     static func origin(
         anchor: NSRect?,
         size: CGSize,

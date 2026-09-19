@@ -181,6 +181,24 @@
         }
       }
     },
+    "panel.resizeHeight": {
+      "comment": "Accessibility label for dragging the compact panel height",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resize height"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整高度"
+          }
+        }
+      }
+    },
     "network.empty": {
       "comment": "Network table: no process has network activity in the latest sample",
       "extractionState": "manual",

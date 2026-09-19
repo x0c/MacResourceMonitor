@@ -85,7 +85,7 @@ graph TD
 1. 用户左键状态项：圆环项直接打开 CPU / 内存表，网速项直接打开网络表并默认按 Download 排序；两项没有互相转换的坐标分支。左键不挂系统菜单，也不能退化成菜单。
 2. 若同一张表已显示，`CompactPanel.hidePanel()` 收起它；若点了另一张表，`CompactPanel.switchContent(to:)` 直接切换；若未显示，`AppDelegate.showPanelBelowStatusItem(content:attempt:)` 读取 `StatusItemController.buttonScreenFrame()`。
 3. 只有 `PanelPlacement.isMenuBarAnchor()` 认定为真实菜单栏状态项框时才调用 `CompactPanel.show(anchor:content:)`。坐标尚未就绪时，`AppDelegate.showPanelBelowStatusItem(content:attempt:)` 会短暂重试；重试用尽才交给 `PanelPlacement.origin()` 的安全居中上边回退，绝不把零坐标当作屏幕左下角位置。
-4. `CompactPanel.position(near:)` 通过 `PanelPlacement.origin()` 把表以图标中心为水平中心、紧贴菜单栏下方；位于底部菜单栏的屏幕时则向可见区域内侧展开，并将位置夹在可见屏幕边界内。
+4. `CompactPanel.position(near:)` 先按记住的高度经 `PanelPlacement.fittedSize()` 夹到当前可见屏，再通过 `PanelPlacement.origin()` 把表以图标中心为水平中心、紧贴菜单栏下方；位于底部菜单栏的屏幕时则向可见区域内侧展开。底边（底部菜单栏时为远离图标的那条边）可拖改高度；拖动中途不写盘，松手才写入 `panel.height`。打开时若当前屏不够高只夹紧显示，不改已记住的高度。
 5. `CompactPanel.show()` 安装全局与本地鼠标按下监视器，同时经 `onVisibilityChange(true)` 通知进程监控域可以刷新列表。面板内点击不关闭；状态项框被加入保留区域，点原图标也不关闭；其他地方点击由 `PanelDismiss.shouldHide()` 判定后收起。
 6. `CompactPanel.hidePanel()` 移除两类监听器、隐藏窗口并经 `onVisibilityChange(false)` 通知列表停止更新；菜单栏双环、表头所依赖的整机指标和网速采样仍独立更新。
 
@@ -148,11 +148,11 @@ graph TD
 | 目录（相对项目根） | 内容 | 关键类或文件 |
 |---|---|---|
 | `MacResourceMonitor/` | 应用生命周期、对象组装、唤回和退出决策 | `AppDelegate.swift` |
-| `MacResourceMonitor/StatusItem/` | 状态项、动态双环和网速绘制、浮层、锚定、点外关闭 | `StatusItemController.swift`、`CompactPanel.swift`、`PanelPlacement.swift`、`PanelDismiss.swift`、`MenuBarIconRenderer.swift` |
+| `MacResourceMonitor/StatusItem/` | 状态项、动态双环和网速绘制、浮层、锚定、点外关闭、底边改高度 | `StatusItemController.swift`、`CompactPanel.swift`、`PanelHeightResizeHandle.swift`、`PanelPlacement.swift`、`PanelDismiss.swift`、`MenuBarIconRenderer.swift` |
 | `MacResourceMonitor/App/` | 显示偏好、设置窗、开机自启的应用层入口 | `AppPreferences.swift`、`SettingsWindowController.swift`、`LaunchAtLoginManager.swift` |
 | `MacResourceMonitor/Views/` | 恢复窗口与两张平表、无蓝框焦点呈现 | `SettingsView.swift`、`ProcessTableView.swift`、`NetworkTableView.swift` |
 | `MacResourceMonitor/Services/` | 默认出口网卡、总网速与按进程网络速率采样 | `NetworkSpeedMonitor.swift`、`ProcessNetworkSampler.swift`、`NettopStreamSampler.swift`、`NetworkListModel.swift` |
-| `MacResourceMonitorTests/` | 锚定、点外关闭、网速格式、入口命中和网络表排序的自动回归 | `PanelPlacementTests.swift`、`NetworkSpeedMonitorTests.swift`、`NetworkTableTests.swift`、`DisplayClassifierTests.swift` |
+| `MacResourceMonitorTests/` | 锚定、点外关闭、网速格式、入口命中、高度夹紧和网络表排序的自动回归 | `PanelPlacementTests.swift`、`NetworkSpeedMonitorTests.swift`、`NetworkTableTests.swift`、`DisplayClassifierTests.swift` |
 | `Configuration/` | 构建与运行环境配置；不是本领域的业务偏好来源 | 配置文件 |
 
 ## §3 本域代码入口索引
@@ -166,7 +166,8 @@ graph TD
 | 动态双环与网速重绘 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.updateMetrics()`、`StatusItemController.updateNetworkSpeed()`、`StatusItemController.renderStatusItem()` | 把两种异步输入统一为状态项图片重绘 |
 | 双环与两行排版 | `MacResourceMonitor/StatusItem/MenuBarIconRenderer.swift` | `MenuBarIconRenderer.image()`、`MenuBarIconRenderer.drawNetworkSpeed()`、`MenuBarIconRenderer.edgeAnchoredBaselines()` | 在固定菜单栏高度内画同心双环、上行和下行读数 |
 | 两张表显示、切换与关闭 | `MacResourceMonitor/StatusItem/CompactPanel.swift` | `CompactPanel.show(anchor:content:)`、`CompactPanel.switchContent(to:)`、`CompactPanel.hidePanel()` | 无标题栏、非激活浮层；切换时先停止旧表再启动新表，点外关闭两者 |
-| 锚定与边界回退 | `MacResourceMonitor/StatusItem/PanelPlacement.swift` | `PanelPlacement.isMenuBarAnchor()`、`PanelPlacement.origin()` | 识别顶部或底部菜单栏，按可见屏幕夹紧面板；无效锚点走安全回退 |
+| 锚定与边界回退 | `MacResourceMonitor/StatusItem/PanelPlacement.swift` | `PanelPlacement.isMenuBarAnchor()`、`PanelPlacement.origin()`、`PanelPlacement.fittedSize()` | 识别顶部或底部菜单栏，按可见屏幕夹紧面板与高度；无效锚点走安全回退 |
+| 底边改高度 | `MacResourceMonitor/StatusItem/CompactPanel.swift`、`PanelHeightResizeHandle.swift` | `CompactPanel.position(near:)`、`PanelHeightResizeHandle` | 顶边锚定，只拖远离图标的那条边；系统上下缩放光标；松手记高度 |
 | 点外关闭判定 | `MacResourceMonitor/StatusItem/PanelDismiss.swift` | `PanelDismiss.shouldHide()` | 面板与状态项框都在保留区域，其他点击才关闭 |
 | 网速显示偏好 | `MacResourceMonitor/App/AppPreferences.swift` | `MenuBarDisplayPreferences.showsNetworkSpeed` | 默认显示并持久化；只供绘制读取，不能另存一份菜单状态 |
 | 显示恢复窗口 | `MacResourceMonitor/App/SettingsWindowController.swift` | `SettingsWindowController.show()` | 创建带标题栏、保存位置的恢复窗口，并建立菜单栏应用的窗口激活会话 |
@@ -182,8 +183,9 @@ graph TD
 | 持久化载体 | 业务语义 | 入口 | 改动注意 |
 |---|---|---|---|
 | 本机默认值 `menuBar.showNetworkSpeed` | 是否绘制两行网速块 | `MenuBarDisplayPreferences.showsNetworkSpeed` | 默认显示；该值只控制呈现，不控制网速采样或双环 |
+| 本机默认值 `panel.height` | 进程表浮层高度 | `AppPreferences.readCompactHeight()` / `writeCompactHeight()` | 用「键是否存在」判断首次，禁止把空当 0；只在底边拖动手势松手后写入；打开时按当前可见屏夹紧但不覆盖已存高度 |
 | 系统登录项状态 | 开机自启开、关、待批准 | `LaunchAtLoginManager.status` | 待批准必须保留为中间态，不能降级成已开启 |
-| 窗口自动保存记录 | 恢复窗口的位置与大小 | `SettingsWindowController.show()` | 首次无记录应先居中；只适用于带标题栏的恢复窗口，不适用于进程表浮层 |
+| 窗口自动保存记录 | 恢复窗口的位置与大小 | `SettingsWindowController.show()` | 首次无记录应先居中；只适用于带标题栏的恢复窗口。进程表浮层只记高度，不记位置 |
 
 不要为此领域新增业务库、云端偏好同步或“菜单栏状态表”；这些都会破坏本工具的纯本地边界。
 
@@ -228,7 +230,8 @@ graph TD
 - **【排错结论 2026-09-05】双环/网速跟邻图标黑白不一致，或圆环被裁成 Wi‑Fi 弧**：黑白由系统按模板图上色，禁止手猜深浅色。动态重绘须先栅格成位图再 `isTemplate`；位图上下文禁止再 `scaleBy(Retina)`（会放大裁切）。权威在全局 `macos-appkit-gotchas` / `MACOS_APP_DEVELOPMENT_GUIDE`；本产品入口 `MenuBarIconRenderer.makeTemplateImage`。
 - 【排版锁定】较快方向数字+单位 **9.5pt**，较慢 **7.5pt**；箭头始终 **8.5pt**；两方向相同或缺样本时两行恢复 8.5pt。改字号必须仍让两行可见字形分别贴齐共同 17pt 布局框的上、下边缘，并保持双环垂直中线（原因：速度对比不能造成菜单栏跳动或假对齐）。禁止交换读数/箭头修倒置。
 - **AI 易错点**【禁止藏图标 / 登录静默】产品无隐藏项；启动须 `removeObject(menuBar.iconVisible)` 并强制圆环可见；登录拉起走 `LoginLaunchDetector` + `MenuBarReopenPolicy`。细则权威在全局菜单栏指南，勿在本仓另立一套。
-- 【隐性依赖】恢复窗口的位置和尺寸应交给 `SettingsWindowController.show()` 的自动保存名处理 -> 只对带标题栏恢复窗保存，禁止把短暂进程表浮层变成会记忆位置的桌面窗口（原因：两种窗口角色不同）。
+- 【隐性依赖】恢复窗口的位置和尺寸应交给 `SettingsWindowController.show()` 的自动保存名处理 -> 只对带标题栏恢复窗保存位置。进程表浮层**只记住高度**（`panel.height`），禁止顺便记住位置或改成可拖走的桌面窗口（原因：两种窗口角色不同；表必须仍锚在图标下方）。
+- **AI 易错点**【列表高度】底边拖高必须用顶边锚定的自绘热区，松手再写盘；打开时按可见区域下沿夹紧，不得盖住程序坞。没有拖过时保持默认高度，禁止把「没存过」当成高度 0。当前屏不够高时只夹紧这一次显示，不要把已记住的高度改小。两张表共用同一高度。禁止开系统四边缩放或让内容高度反向撑窗口（原因：菜单栏表必须贴住图标；内容撑高会把用户拖定的高度顶掉）。
 - **AI 易错点**【开机自启三态】`LaunchAtLoginManager.isEnabled` 只在系统真正会登录拉起时为真；`requiresApproval` 是待批准 -> 菜单和设置窗必须显示中间态并提供系统登录项入口，不得将待批准显示为开启（原因：用户会以为系统已经生效）。
 - 【禁止】关闭设置窗后顺带退出；`applicationShouldTerminateAfterLastWindowClosed` 不退出；`applicationShouldTerminate` 只由 `TerminationGuard` 在更新安装会话放行（跨产品退出守卫见全局）。
 - 【消歧】“打开主窗口”在右键菜单的用户含义是“展示恢复窗口”，不是启动桌面进程表，也不是把进程表改成主窗口；“设置”也复用同一带标题栏窗口。
@@ -240,7 +243,7 @@ graph TD
 |---|---|---|---|
 | 改左键行为 | `StatusItemController`、`AppDelegate.toggleCompactPanel()`、点外关闭测试 | 把两个状态项合回坐标分支、或把左键重新绑成系统菜单 | 圆环只开 CPU/内存、网速只开网络 |
 | 改右键项目排序或文案 | `StatusItemController.configureMenu()`、`menuNeedsUpdate()`、产品契约 | 为了方便把菜单永久挂到状态项，漏掉待批准入口 | 右键有完整项目，左键保持独立；状态每次打开都刷新 |
-| 改面板尺寸或圆角 | `AppPreferences.compactSize`、`CompactPanel.position()`、`PanelPlacement.origin()` | 只改视图尺寸，不改定位边界或常显滚动条空间 | 正常、多屏、边缘锚定下均不越界，不损害常见应用名阅读 |
+| 改面板尺寸或圆角 | `AppPreferences.compactSize`、`AppPreferences.readCompactHeight()`、`CompactPanel.position()`、`PanelPlacement.origin()`、`PanelPlacement.fittedSize()` | 只改视图尺寸，不改定位边界或常显滚动条空间；拖动中途写盘；打开时用夹紧后的高度覆盖已存值 | 正常、多屏、边缘锚定下均不越界，不损害常见应用名阅读；最高停在可见区域下沿；松手后下次打开仍是同一高度 |
 | 改点外关闭 | `CompactPanel.installOutsideClickMonitor()`、`PanelDismiss.shouldHide()` | 监听器未移除，或把状态项点击当面板外点击 | 收起后无残留监听器；面板与状态项均保留 |
 | 改双环数据 | `StatusItemController.updateMetrics()`、`MenuBarIconRenderer.image()`、进程监控 KB | 冻结列表时停止双环，或把进程行内存相加 | 双环持续刷新并沿用监控域的整机口径 |
 | 改双环/网速绘制 | `MenuBarIconRenderer.makeTemplateImage()`、模板测例 | 只用 drawingHandler、或位图上下文再 scaleBy(Retina) | 与邻图标同色相；形状仍是同心双环（非 Wi‑Fi 弧） |
@@ -271,13 +274,13 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
   -derivedDataPath build/DerivedData -destination 'platform=macOS' test
 ```
 
-重点检查 `PanelPlacementTests`、`NetworkSpeedMonitorTests` 以及 `DisplayClassifierTests.testPanelDismissKeepsStatusItem()`：它们覆盖无效锚点不掉角落、顶部/底部菜单栏定位、默认出口识别、共同单位与 `<1`、网速块尺寸稳定、状态项点击不被误判为点外关闭。
+重点检查 `PanelPlacementTests`、`NetworkSpeedMonitorTests` 以及 `DisplayClassifierTests.testPanelDismissKeepsStatusItem()`：它们覆盖无效锚点不掉角落、顶部/底部菜单栏定位、过高列表夹在可见区域下沿、高度键空值不是 0、默认出口识别、共同单位与 `<1`、网速块尺寸稳定、状态项点击不被误判为点外关闭。
 
 ### 人工菜单栏交互验收
 
 必须在实际安装版打开 Mac Resource Monitor 后完成，不能用构建成功或 AX 树代替：
 
-1. 左键图标，确认进程表水平居中于图标下方；连续点面板内和原图标不关，点其他地方立即关；外接屏或菜单栏在屏幕底部时，表仍向可见区域内展开且不掉到角落。
+1. 左键图标，确认进程表水平居中于图标下方；连续点面板内和原图标不关，点其他地方立即关；外接屏或菜单栏在屏幕底部时，表仍向可见区域内展开且不掉到角落。拖底边改高度时顶边不离图标，最高停在可见区域下沿（含程序坞内侧）；松手关闭再打开高度仍在；未拖过则仍是默认高度。
 2. 右键图标，确认只在右键出现菜单；左键没有变成菜单。确认开机自启为关或待批准时的中间态，待批准可直接去系统登录项。
 3. 切换“显示网速”，确认只隐藏/恢复两行读数，双环仍刷新，重新打开应用后选择保留。上行永远在上、下行永远在下；切换 Wi-Fi、以太网或 VPN 后不得立即继续显示旧接口读数。
 4. 确认右键与设置均无「隐藏 / 显示菜单栏图标」；图标始终可见。登录项拉起时不自动弹设置窗（可用 `--show-panel` 等非登录路径对照）。
@@ -285,7 +288,7 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
 
 ### 改动后的针对性检查
 
-- 改 `PanelPlacement.origin()` 或 `AppDelegate.showPanelBelowStatusItem()` 后，先跑定位测试，再在多屏/菜单栏边缘人工验收；不能仅测传入正常坐标。
+- 改 `PanelPlacement.origin()`、`PanelPlacement.fittedSize()` 或 `AppDelegate.showPanelBelowStatusItem()` 后，先跑定位与高度夹紧测试，再在多屏/菜单栏边缘人工验收；不能仅测传入正常坐标。改底边拖高后，确认拖动中途不写盘、松手才记住、打开时不够高只夹紧显示。
 - 改网速格式、字型、单元格宽度或基线后，先跑网速测试，再对强上行、强下行、相等、无样本四种情形截取真实菜单栏画面；确认状态项宽高不会跳。
 - 改菜单栏入口或登录判定后，验证冷启动图标可见、登录静默、主动打开主窗口三条路径。
 - 改退出逻辑后，分别验证关闭最后窗口、普通退出、更新安装会话；除最后一种外均不得让应用消失。

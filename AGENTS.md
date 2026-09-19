@@ -22,7 +22,7 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 - 极简平表：图标、人话名、整机 CPU%、内存%、结束。不要进程树，不要展开孩子。
 - **菜单栏应用**：程序坞没有图标，没有常驻桌面进程表工作区。左键打开点开结束的表，表出现在菜单栏图标正下方，点外面关；右键才是开机自启 / 打开主窗口 / 设置 / 检查更新 / 退出。**图标即主入口：禁止隐藏菜单栏图标**（菜单与设置都不得提供该项；启动强制图标可见）。禁止把菜单常挂在状态项上。禁止因拿不到图标坐标而掉到屏幕角落。设置窗仅作偏好与「打开主窗口」入口，**不是**藏图标后的恢复面。
 - **【裁定 2026-09-05】登录项静默**：开机自启拉起时只后台就绪，禁止自动弹出设置窗 / 恢复窗；用 MacKit `LoginLaunchDetector.isLaunchedAsLoginItem` 传入 `MenuBarReopenPolicy`。
-- 表顶有**冻结**开关（英文 Freeze / 中文冻结），默认关；打开后名单顺序尽量不动、数字仍刷新，点列头排序会自动关冻结。菜单栏双环继续刷新。CPU/内存表收起后面板名单不更新；网络表保留最近一帧、收起后停止高耗按进程采样，打开不得出现加载屏。鼠标停在某一行的结束符号上时，这一行钉在原位，避免刷新跳动误杀。表头 CPU / 内存列写出整机汇总（如 `CPU 88.8%` `Mem 68.8%`），点对应列在两种从高到低之间切换，没有升序。表头不许留出大块空白。
+- 表顶有**冻结**开关（英文 Freeze / 中文冻结），默认关；打开后名单顺序尽量不动、数字仍刷新，点列头排序会自动关冻结。菜单栏双环继续刷新。CPU/内存表收起后面板名单不更新；网络表保留最近一帧、收起后停止高耗按进程采样，打开不得出现加载屏。鼠标停在某一行的结束符号上时，这一行钉在原位，避免刷新跳动误杀。表头 CPU / 内存列写出整机汇总（如 `CPU 88.8%` `Mem 68.8%`），点对应列在两种从高到低之间切换，没有升序。表头不许留出大块空白。列表底边可拖改高度并记住，最高不超过屏幕可见下沿。
 - 开机自启默认关。不上 App Store。关沙盒。不要申请辅助功能或完整磁盘访问。
 - 中英文案。无系统蓝框。分层应用图标 + 菜单栏模板图标。
 
@@ -51,12 +51,12 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 
 - [~/.config/agentsync/docs/MACOS_APP_DEVELOPMENT_GUIDE.md](~/.config/agentsync/docs/MACOS_APP_DEVELOPMENT_GUIDE.md)：改、评审或排查 Mac Resource Monitor 的菜单栏图标、开机自启动（含登录静默）、设置窗或检查更新前**必读**。不读会在登录时弹出设置窗，或误加回「隐藏菜单栏图标」。
 - [app-macos/AGENTS.md](~/Codes/MacResourceMonitor/app-macos/AGENTS.md)：改、评审或排查 macOS 客户端工程、菜单栏浮层、进程表、结束、覆盖安装、公开开源或发版前**必读**。不读会加回桌面进程表工作区、把菜单挂到左键上、开沙盒导致进程表空，覆盖安装把签名装坏，或把内网地址推进公开仓。
-- [app-macos/docs/PRODUCT_CONTRACT.md](~/Codes/MacResourceMonitor/app-macos/docs/PRODUCT_CONTRACT.md)：讨论、选择或执行产品命名/重命名，或改、评审、排查菜单栏图标/模板图、两行网速、网速左侧空白/刷新抖动、自动识别当前网卡、隐藏图标、恢复窗口、开机自启三态及任何其他用户可见行为（人话名折行、名字列过宽、长包名省略、Chrome 显示成 `Goog...rome`、长名字减小字体、前缀省略、中间省略、整机占比、刚开机内存六十多、表头汇总、点列名排序、表出现在图标下方、掉到屏幕角落、结束边界、菜单栏点开/点外面关、冻结开关 Freeze/冻结、表头顶空白、结束符号悬停钉行、检查更新入口、进程表仍显示旧图标/粉底黑叉、网络表字号色阶、网络表加载屏、网络表名单秒级闪烁/Chrome 进进出出）前**必读**。不读会沿用已经失真的旧名称、把已锁体验改掉、把网速算到错误网卡上、把开机六十当泄漏去改口径、把 ChatGPT/Cursor Agent/Corral 显示回 node/Python、把隐藏图标后的恢复面做成进程表、把系统还在吐旧图当成图标没装进去去重做、把防抖又预留四位数字导致左侧大空白，或把短暂无流量的网络行秒级踢出名单。
+- [app-macos/docs/PRODUCT_CONTRACT.md](~/Codes/MacResourceMonitor/app-macos/docs/PRODUCT_CONTRACT.md)：讨论、选择或执行产品命名/重命名，或改、评审、排查菜单栏图标/模板图、两行网速、网速左侧空白/刷新抖动、自动识别当前网卡、隐藏图标、恢复窗口、开机自启三态及任何其他用户可见行为（人话名折行、名字列过宽、长包名省略、Chrome 显示成 `Goog...rome`、长名字减小字体、前缀省略、中间省略、整机占比、刚开机内存六十多、表头汇总、点列名排序、表出现在图标下方、掉到屏幕角落、结束边界、菜单栏点开/点外面关、冻结开关 Freeze/冻结、表头顶空白、结束符号悬停钉行、检查更新入口、进程表仍显示旧图标/粉底黑叉、网络表字号色阶、网络表加载屏、网络表名单秒级闪烁/Chrome 进进出出、结束失败横幅一直不关、失败提示用红色、拖底边改高度、列表高度记忆）前**必读**。不读会沿用已经失真的旧名称、把已锁体验改掉、把网速算到错误网卡上、把开机六十当泄漏去改口径、把 ChatGPT/Cursor Agent/Corral 显示回 node/Python、把隐藏图标后的恢复面做成进程表、把系统还在吐旧图当成图标没装进去去重做、把防抖又预留四位数字导致左侧大空白，把短暂无流量的网络行秒级踢出名单，把结束失败做成一直占着的红条，或把列表做成不能改高度、下次打开忘了高度、拖过屏幕底的面板。
 - [~/Codes/_standards/swift.md](~/Codes/_standards/swift.md)：新建、评审或改造本 macOS 应用前**必读**。不读会偏离 Swift 6 并发基线和覆盖安装闭环。
 - [~/Codes/_standards/workspace-docs/swift-docs/macos-app-baseline.md](~/Codes/_standards/workspace-docs/swift-docs/macos-app-baseline.md)：脚手架、评审完整度、补分发/开机自启/设置窗前**必读**。不读会把「第一波能跑」当成完成，或把未对外发行的暂缓当成可以永久不做。
 - [~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md](~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md)：改人话名、责任进程、整机 CPU%、折行规则前**必读**。不读会做成进程树或按 Unix 父进程建树。
-- [app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改、评审或排查实时占用、人话名、排序、刷新、结束权限或终止流程前**必读**。不读会把整机口径、平表聚合或安全结束边界改错。
-- [app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏左右键、浮层锚定、网速、后台网络采样、`nettop` 高占用、风扇狂转、隐藏图标、恢复窗口、开机自启或退出前**必读**。不读会让左键误弹菜单、面板掉到角落、隐藏后无稳定入口，或把采样子进程的高 CPU 漏算成系统负载。
+- [app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改、评审或排查实时占用、人话名、排序、刷新、结束权限、终止流程或结束失败提示前**必读**。不读会把整机口径、平表聚合或安全结束边界改错，或把失败提示做成一直占着的红条。
+- [app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏左右键、浮层锚定、网速、后台网络采样、`nettop` 高占用、风扇狂转、隐藏图标、恢复窗口、开机自启、退出、拖底边改高度或列表高度记忆前**必读**。不读会让左键误弹菜单、面板掉到角落、隐藏后无稳定入口，把采样子进程的高 CPU 漏算成系统负载，或把列表高度做成拖过屏幕底、拖动中途写盘、下次打开忘掉。
 - [app-macos/docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md](~/Codes/MacResourceMonitor/app-macos/docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)：改、评审或排查构建、签名、公证、应用内更新、GitHub Release、Homebrew，或公开仓 **GitHub About / Topics / README 门面检索**前**必读**。不读会把工程源、版本、签名链或公开发行边界改坏，或只改 README 却声称站内 SEO 已完成、用「进程表」当检索词、把近失当成搜不到去改名。
 - [app-macos/docs/OPERATIONS_GUIDE.md](~/Codes/MacResourceMonitor/app-macos/docs/OPERATIONS_GUIDE.md)：构建、测试、启动、覆盖安装、浮层截图验收或排查本机开发环境前**必读**。不读会在错误仓根构建、误把测试通过当安装验收、覆盖错误版本，或因状态栏浮层截不到图而误判界面没出来。
 
@@ -93,7 +93,7 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 - **关窗不退出**：`applicationShouldTerminateAfterLastWindowClosed` = false。退出只走「退出」→ `requestTermination`。Sparkle 安装更新时必须放行终止。
 - **关沙盒**（entitlements 空 dict）。禁止辅助功能 / 完整磁盘访问。
 - **禁止把菜单挂到状态项**：左键开表；右键开机自启 / 显示网速 / 打开主窗口 / 设置 / 检查更新 / 退出。
-- **浮层形态 1**：点外关；列表实底；表锚在图标正下方。图标坐标假（宽高 0 / 不在菜单栏带）→ 禁止用假位置，等一拍再开。
+- **浮层形态 1**：点外关；列表实底；表锚在图标正下方。图标坐标假（宽高 0 / 不在菜单栏带）→ 禁止用假位置，等一拍再开。底边可拖改高度并记住；最高夹在可见屏下沿内；只记高度，不把表变成会记位置的桌面窗口。
 - **冻结开关**（Freeze / 冻结，默认关）稳住名单顺序与成员，数字仍刷；双环与表头汇总继续刷。点列头排序自动关冻结。CPU/内存表收起不刷可见名单；网络表保留最近一帧、收起后停止高耗按进程采样，禁止加载屏。不要在 `ProcessTableView` 创建即开刷。
 - **结束符号悬停钉行**；钉死只针对结束符号。
 - **表头**：`CPU 88.8%` / `Mem 68.8%`；点列仅从高到低；CPU 行加总上限 100%；内存读系统级物理占用，禁止行相加。
@@ -130,8 +130,8 @@ open "/Applications/Mac Resource Monitor.app"
 - [docs/PRODUCT_CONTRACT.md](docs/PRODUCT_CONTRACT.md)：改任何用户可见行为前必读。不读会改掉已锁体验。
 - 本机 overlay / 玻璃 / 图标 / 本地化 / 设置项：`~/Codes/_standards/workspace-docs/swift-docs/`。
 - 进程身份：`~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md`。
-- [docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改占用/人话名/结束前必读。
-- [docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏、浮层、网速、后台网络采样、`nettop` 高占用或风扇狂转前**必读**。不读会把采样子进程的高 CPU 漏算成系统负载，或为了首开无加载屏而每秒启动高开销进程。
+- [docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md](docs/PROCESS_MONITORING_AND_TERMINATION_KNOWLEDGE_BASE.md)：改占用/人话名/结束或结束失败提示前必读。不读会把失败提示做成一直占着的红条。
+- [docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md](docs/MENU_BAR_INTERACTION_KNOWLEDGE_BASE.md)：改、评审或排查菜单栏、浮层、网速、后台网络采样、`nettop` 高占用、风扇狂转、拖底边改高度或列表高度记忆前**必读**。不读会把采样子进程的高 CPU 漏算成系统负载，为了首开无加载屏而每秒启动高开销进程，或把列表高度做成拖过屏幕底、拖动中途写盘、下次打开忘掉。
 - [docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md](docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md)：改构建/签名/公证/更新，或改公开仓 **GitHub About / Topics / README 门面检索**前**必读**。不读会只改 README 却声称站内 SEO 已完成，或用「进程表」当检索词、把近失当成搜不到去改名。
 - [docs/OPERATIONS_GUIDE.md](docs/OPERATIONS_GUIDE.md)：本地构建/覆盖安装/浮层截图排障前必读。
 

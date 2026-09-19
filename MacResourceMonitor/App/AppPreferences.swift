@@ -21,7 +21,12 @@ nonisolated enum AppPreferences {
     static let networkRefreshInterval: TimeInterval = 1
 
     /// 常显滚动条后名字列仍够 Google Chrome / Activity Monitor；禁止为包名再加宽。
-    static let compactSize = CGSize(width: 368, height: 360)
+    static let compactWidth: CGFloat = 368
+    static let compactHeightDefault: CGFloat = 360
+    static let compactHeightMin: CGFloat = 160
+    static let compactHeightKey = "panel.height"
+    static let compactResizeHandleThickness: CGFloat = 8
+    static let compactSize = CGSize(width: compactWidth, height: compactHeightDefault)
     static let compactCornerRadius: CGFloat = 16
     static let metricColumnWidth: CGFloat = 66
     static let endColumnWidth: CGFloat = 22
@@ -44,6 +49,24 @@ nonisolated enum AppPreferences {
             return defaults.bool(forKey: key)
         }
         return defaultValue
+    }
+
+    /// 读列表高度；没有存过或非法值都回默认，禁止把空当成 0。
+    static func readCompactHeight(defaults: UserDefaults = .standard) -> CGFloat {
+        guard defaults.object(forKey: compactHeightKey) != nil else {
+            return compactHeightDefault
+        }
+        let value = CGFloat(defaults.double(forKey: compactHeightKey))
+        guard value.isFinite, value > 0 else {
+            return compactHeightDefault
+        }
+        return value
+    }
+
+    /// 只在底边拖动手势松手后写入实际高度。
+    static func writeCompactHeight(_ height: CGFloat, defaults: UserDefaults = .standard) {
+        guard height.isFinite, height > 0 else { return }
+        defaults.set(Double(height), forKey: compactHeightKey)
     }
 }
 

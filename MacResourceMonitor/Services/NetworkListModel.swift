@@ -97,6 +97,7 @@ final class NetworkListModel {
 
     private(set) var rows: [NetworkProcessRow] = []
     private(set) var lastError: String?
+    private let endFailureBanner = TransientStatusMessage()
     var sortColumn: NetworkSortColumn = defaultSortColumn
     private let sampler = ProcessNetworkSampler()
     private let processRows: @MainActor () -> [ProcessRow]
@@ -161,6 +162,7 @@ final class NetworkListModel {
         panelVisible = visible
         if !visible {
             clearPin()
+            clearEndFailure()
         }
         applyRunState()
     }
@@ -184,23 +186,23 @@ final class NetworkListModel {
     }
 
     func end(_ row: NetworkProcessRow) async {
-        lastError = nil
+        clearEndFailure()
         switch await ProcessTerminator.end(row.process) {
         case .ended, .blocked:
             break
         case .failed(let message):
-            lastError = message
+            showEndFailure(message)
         }
         await refresh()
     }
 
     func endAll(_ candidates: [ProcessRow]) async {
-        lastError = nil
+        clearEndFailure()
         switch await ProcessTerminator.endAll(candidates) {
         case .ended, .blocked:
             break
         case .failed:
-            lastError = String(localized: "table.endAll.failed")
+            showEndFailure(String(localized: "table.endAll.failed"))
         }
         await refresh()
     }
@@ -288,6 +290,17 @@ final class NetworkListModel {
         if let pinnedRowID, !rows.contains(where: { $0.id == pinnedRowID }) {
             clearPin()
         }
+    }
+
+    private func showEndFailure(_ message: String) {
+        endFailureBanner.present(message) { [weak self] text in
+            self?.lastError = text
+        }
+    }
+
+    private func clearEndFailure() {
+        endFailureBanner.cancel()
+        lastError = nil
     }
 
     private func clearPin() {

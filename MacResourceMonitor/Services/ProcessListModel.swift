@@ -52,6 +52,7 @@ final class ProcessListModel {
     private(set) var rows: [ProcessRow] = []
     private(set) var latestRows: [ProcessRow] = []
     private(set) var lastError: String?
+    private let endFailureBanner = TransientStatusMessage()
     private(set) var systemCPUPercent = 0.0
     private(set) var systemMemoryPercent = 0.0
     var sortColumn: ProcessSortColumn = .cpu
@@ -140,6 +141,7 @@ final class ProcessListModel {
             Task { await refresh() }
         } else {
             clearPin()
+            clearEndFailure()
         }
     }
 
@@ -206,24 +208,24 @@ final class ProcessListModel {
     func end(_ row: ProcessRow) async {
         guard endingRowIDs.insert(row.id).inserted else { return }
         defer { endingRowIDs.remove(row.id) }
-        lastError = nil
+        clearEndFailure()
         let outcome = await ProcessTerminator.end(row)
         switch outcome {
         case .ended, .blocked:
             break
         case .failed(let message):
-            lastError = message
+            showEndFailure(message)
         }
         await refresh()
     }
 
     func endAll(_ candidates: [ProcessRow]) async {
-        lastError = nil
+        clearEndFailure()
         switch await ProcessTerminator.endAll(candidates) {
         case .ended, .blocked:
             break
         case .failed:
-            lastError = String(localized: "table.endAll.failed")
+            showEndFailure(String(localized: "table.endAll.failed"))
         }
         await refresh()
     }
@@ -231,6 +233,17 @@ final class ProcessListModel {
     private func notifyMetrics() {
         guard hasCPUReading else { return }
         metricsObserver?(systemCPUPercent, systemMemoryPercent)
+    }
+
+    private func showEndFailure(_ message: String) {
+        endFailureBanner.present(message) { [weak self] text in
+            self?.lastError = text
+        }
+    }
+
+    private func clearEndFailure() {
+        endFailureBanner.cancel()
+        lastError = nil
     }
 
     private func clearPin() {

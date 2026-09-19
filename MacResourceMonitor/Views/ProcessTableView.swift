@@ -37,16 +37,7 @@ struct ProcessTableView: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(6)
-        .overlay(alignment: .bottom) {
-            if let lastError = model.lastError {
-                Text(lastError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(8)
-                    .frame(maxWidth: .infinity)
-                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.96))
-            }
-        }
+        .endFailureBanner(model.lastError)
         .ignoresSafeArea()
         .focusEffectDisabled()
         .environment(\.controlSize, .mini)

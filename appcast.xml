@@ -6,6 +6,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Mac Resource Monitor</title>
         <item>
+            <title>1.1.4</title>
+            <pubDate>Sat, 19 Sep 2026 12:55:08 +0800</pubDate>
+            <link>https://github.com/x0c/MacResourceMonitor</link>
+            <sparkle:version>40</sparkle:version>
+            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/x0c/MacResourceMonitor/releases/download/v1.1.4/Mac-Resource-Monitor-1.1.4.zip" length="3740196" type="application/octet-stream" sparkle:edSignature="dmhCDAENL3MgwDFwz6lAQo8yXhpvNqsLfjqAhMJFr4Z40PzuWYM2xdIiGCfr66ixa7A7jb6V8Nb5OaFtHo4CAA=="/>
+        </item>
+        <item>
             <title>1.1.2</title>
             <pubDate>Sun, 13 Sep 2026 22:50:09 +0800</pubDate>
             <link>https://github.com/x0c/MacResourceMonitor</link>
@@ -35,6 +44,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: YeJzU0q+ZY5Ic7e8lOCEWQCONZWqgxkz4Ep+StI1rA+XLVBc7vBIzgjpbTcnnoze9HUZ7be7q0upTjE9fNyQAA==
-length: 2502
+edSignature: 1toocMQGKmaNBzaClTH8x1e4FO8j5u4C3fnRDBa/2IqDPi3PI10sqpwEiHUFbIHkQ0L4iTP/jj07mbeCmMvQCQ==
+length: 3188
 -->

@@ -34,6 +34,9 @@ final class CompactPanel: NSPanel {
     private var hostingView: NSHostingView<CompactPanelView>?
     private let contentState = CompactPanelContentState()
     private let outsideClickMonitor = OutsideClickMonitor()
+    private let resizeHandle = PanelHeightResizeHandle(frame: .zero)
+    private var currentAnchor: NSRect?
+    private var preferredHeight = AppPreferences.readCompactHeight()
     var additionalKeptFrames: () -> [NSRect] = { [] }
     var onVisibilityChange: (CompactPanelContent, Bool) -> Void = { _, _ in }
 
@@ -66,6 +69,7 @@ final class CompactPanel: NSPanel {
         hosting.safeAreaRegions = []
         hostingView = hosting
         contentView = makeChrome(hosting)
+        installResizeHandle()
         orderOut(nil)
     }
 
@@ -84,6 +88,7 @@ final class CompactPanel: NSPanel {
     var currentContent: CompactPanelContent { contentState.content }
 
     func show(anchor: NSRect?, content: CompactPanelContent) {
+        currentAnchor = anchor
         switchContent(to: content)
         position(near: anchor)
         orderFrontRegardless()
@@ -111,10 +116,18 @@ final class CompactPanel: NSPanel {
     }
 
     private func position(near anchor: NSRect?) {
-        let size = AppPreferences.compactSize
         let screens = NSScreen.screens.map(\.frame)
         let visibles = NSScreen.screens.map(\.visibleFrame)
         let fallback = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+        let size = PanelPlacement.fittedSize(
+            preferredHeight: preferredHeight,
+            minHeight: AppPreferences.compactHeightMin,
+            width: AppPreferences.compactWidth,
+            anchor: anchor,
+            screens: screens,
+            visibleScreens: visibles,
+            fallbackVisible: fallback
+        )
         let origin = PanelPlacement.origin(
             anchor: anchor,
             size: size,
@@ -123,6 +136,46 @@ final class CompactPanel: NSPanel {
             fallbackVisible: fallback
         )
         setFrame(NSRect(origin: origin, size: size), display: true)
+        layoutResizeHandle()
+    }
+
+    private func installResizeHandle() {
+        resizeHandle.onDrag = { [weak self] height in
+            guard let self else { return }
+            self.preferredHeight = height
+            self.position(near: self.currentAnchor)
+        }
+        resizeHandle.onEnd = { [weak self] in
+            guard let self else { return }
+            self.preferredHeight = self.frame.height
+            AppPreferences.writeCompactHeight(self.preferredHeight)
+        }
+        resizeHandle.autoresizingMask = [.width]
+        contentView?.addSubview(resizeHandle)
+        layoutResizeHandle()
+    }
+
+    private func layoutResizeHandle() {
+        guard let contentView else { return }
+        let thickness = AppPreferences.compactResizeHandleThickness
+        let growsDownward = PanelPlacement.growsDownward(
+            anchor: currentAnchor,
+            screens: NSScreen.screens.map(\.frame)
+        )
+        resizeHandle.growsDownward = growsDownward
+        if growsDownward {
+            resizeHandle.frame = NSRect(x: 0, y: 0, width: contentView.bounds.width, height: thickness)
+            resizeHandle.autoresizingMask = [.width]
+        } else {
+            resizeHandle.frame = NSRect(
+                x: 0,
+                y: contentView.bounds.height - thickness,
+                width: contentView.bounds.width,
+                height: thickness
+            )
+            resizeHandle.autoresizingMask = [.width, .minYMargin]
+        }
+        invalidateCursorRects(for: resizeHandle)
     }
 
     private func installOutsideClickMonitor() {

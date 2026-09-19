@@ -147,13 +147,13 @@ sequenceDiagram
 
 结束器先阻止两类行：系统保护行，以及任何成员并非当前用户的行。被阻止是预期安全结果，不显示为执行失败。同一批成员身份若已有结束进行中（含网络表与进程表交叉），再次结束返回阻止，避免并发发信号。
 
-单行与批量结束都直接向候选成员发送 SIGKILL，不再先请求正常退出，也不在发信号前等待。每发信号前仍复核 PID+启动时刻与当前可执行路径，并跳过系统保护目标。批量动作先去重成员身份，再用与单行相同的全局互斥一次发送；发送后的短暂等待只用于确认结果，不会推迟强制结束。成员都已消失才是 `ended`，否则将本地化失败文案交给表内提示。
+单行与批量结束都直接向候选成员发送 SIGKILL，不再先请求正常退出，也不在发信号前等待。每发信号前仍复核 PID+启动时刻与当前可执行路径，并跳过系统保护目标。批量动作先去重成员身份，再用与单行相同的全局互斥一次发送；发送后的短暂等待只用于确认结果，不会推迟强制结束。成员都已消失才是 `ended`，否则将本地化失败文案交给表内提示。该提示必须让用户看见，但不得用红色、也不得一直占着表底：用次要色，大约 3 秒后自动消失；收起浮层也立刻拿掉。单行失败与批量「有些进程未能结束」共用这一套。红色只留给可结束符号的悬停。
 
 ### 2.7 表内呈现与可访问性
 
 `ProcessTableView` 只渲染 `model.visibleRows`，顶部放冻结开关、CPU/内存汇总列和结束列圆形 `×`；网络表使用同一结束列表头。表头必须复用行内圆形结束符号的视觉，不使用裸 `×`。表头 `×` 只在存在可结束候选时可用；点击时固定候选快照，并在当前浮层内部稳定显示无系统蓝框的二次确认，显示候选行数量和未保存内容风险，取消不执行。确认不得依赖会让菜单栏浮层失焦的独立弹窗或弹出窗口。未冻结时当前排序列为主色，另一列为次要色；冻结时列头都不强调排序。每行由 `ProcessRowView` 显示图标、人话名、CPU、内存和结束符号。
 
-结束符号是简洁的关闭图标，而不是文字按钮；仅在可结束且悬停时变红。系统保护或非当前用户行的控件禁用并给出对应帮助说明。行的无障碍文案包含人话名、CPU 与内存百分比；按钮也有无障碍名称和限制原因。
+结束符号是简洁的关闭图标，而不是文字按钮；仅在可结束且悬停时变红。系统保护或非当前用户行的控件禁用并给出对应帮助说明。行的无障碍文案包含人话名、CPU 与内存百分比；按钮也有无障碍名称和限制原因。结束失败时表底出现次要色短提示，大约 3 秒后自动消失；收起浮层立刻拿掉。禁止用红色、禁止一直占着。
 
 每个 CPU / 内存行和网络行的整行右键菜单都由共享行外观提供两个动作：桌面应用优先在访达中选中对应 `.app`，命令行工具选中实际可执行文件；目标路径不存在时仅禁用该项。复制名称始终复制当前显示的人话名，不复制 PID、包名或路径。右键不得触发结束或改变冻结状态。
 
@@ -161,10 +161,10 @@ sequenceDiagram
 
 | 目录（相对 app-macos 项目根） | 内容 | 关键类/文件数 |
 |---|---|---|
-| `MacResourceMonitor/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`，7 个文件 |
+| `MacResourceMonitor/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`、`TransientStatusMessage` |
 | `MacResourceMonitor/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
-| `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、单项/批量结束触发、确认、行右键和悬停钉位入口 | `ProcessTableView.swift`、`ProcessRowView.swift`、`NetworkRowView.swift`、`MonitorTableRowChrome.swift`、`BulkEndButton.swift`，5 个核心文件 |
-| `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护和 CPU 上限的回归测试 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`，2 个文件 |
+| `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、单项/批量结束触发、确认、行右键、悬停钉位入口和结束失败提示 | `ProcessTableView.swift`、`ProcessRowView.swift`、`NetworkRowView.swift`、`MonitorTableRowChrome.swift`、`BulkEndButton.swift`、`EndFailureBanner.swift` |
+| `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护、CPU 上限和失败提示自动消失 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`、`TransientStatusMessageTests.swift` |
 | `docs/` | 本域产品行为权威契约及本知识库 | `PRODUCT_CONTRACT.md` 与本文件，2 个文件 |
 
 ## §3 本域代码入口索引
@@ -179,6 +179,7 @@ sequenceDiagram
 | 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `MacResourceMonitor/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
 | 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
 | 修改结束权限、单项/批量强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()`、`endAll()` | 复核成员身份与安全标记后直接强制结束。 |
+| 修改结束失败提示的停留、颜色或关闭时机 | 表底短暂提示 | `MacResourceMonitor/Services/TransientStatusMessage.swift`、`MacResourceMonitor/Views/EndFailureBanner.swift` | 必须让用户看见失败，但用次要色、约 3 秒自动消失；收起浮层立刻拿掉。禁止改回红色常驻条。 |
 | 修改表头、批量结束确认、冻结开关或排序点击 | 表格视图 | `MacResourceMonitor/Views/ProcessTableView.swift`、`NetworkTableView.swift`、`BulkEndButton.swift` | 连接主状态与表头互动，并固定确认时的批量候选快照。 |
 | 修改结束图标、禁用状态、悬停或行内视觉 | 行视图 | `MacResourceMonitor/Views/ProcessRowView.swift` · `endButton`、`helpText()` | 只把当前行状态映射到 UI 与回调。 |
 | 修改归类、保护和口径后的回归保护 | 分类测试 | `MacResourceMonitorTests/DisplayClassifierTests.swift` | 覆盖 ChatGPT、Cursor Agent、pi、Corral、独立工具、保护行和 CPU 上限。 |
@@ -233,6 +234,8 @@ sequenceDiagram
 - 【隐性语义】`ArgumentCache` 仅在某一 `ProcessIdentity` 第一次出现时读取参数，并在快照完成后按存活身份清理；新增参数识别规则不能改成每秒读取全机参数。
 - 【禁止】将系统保护只按展示名称判断 -> 必须保留 PID、保护名称和系统路径三类保护线索，且路径须覆盖 `/System/`、`/usr/libexec/`、`/usr/sbin/`、`/sbin/`（原因：WindowServer 等短名可能被误判为普通具名工具；`/usr/sbin` 不在旧前缀里）。
 - 【禁止】把失败的结束结果吞掉 -> 必须让 `ProcessListModel.end()` 写入本地化失败信息并刷新（原因：用户需要知道仍有成员存活，而不是误以为已结束）。
+- **AI 易错点**【禁止】把结束失败提示做成一直占着的红条 -> 必须用次要色、大约 3 秒自动消失，收起浮层也立刻拿掉（原因：用户 2026-09-19 明确否决常驻红色横幅；失败仍要被看见，但不能压着表底不走）。
+- **AI 易错点**【禁止】新一次失败提示被上一次的自动关闭清掉 -> 必须作废上一轮定时（原因：连点结束时旧定时器会把新提示提前拿走）。
 - 【禁止】表头批量结束不确认、点后因浮层失焦没有可见反馈、确认后重新读取新名单、或把本应用一起结束 -> 点击时固定候选快照，在当前浮层内显示无蓝框确认层，取消零副作用；确认只处理该快照且排除 Mac Resource Monitor 自身。表头复用行内圆形 `×` 样式。
 - 【消歧】行内存占比 vs 系统内存占比：前者属于 `ProcessRow`，是可见责任对象成员的 physical footprint；后者属于 `ProcessListModel`，是 host VM 的整机口径。两者不能互传或相加。
 - 【消歧】列表冻结 vs 结束行钉位：前者冻结整份名单以便用户定位；后者只在结束符号悬停期间保持一行位置，数值依旧刷新。两者不可互相替代。
@@ -272,6 +275,7 @@ xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme Ma
 5. 选择一个明确属于当前用户、可安全结束的临时测试进程，确认单项点击立即强制结束，不出现正常退出等待；不要把系统进程、其他用户进程或重要工作进程当验收样本。
 6. 点击表头 `×`，确认弹窗显示当前候选数量与未保存内容风险；先取消并确认没有进程被结束。批量确认只用专门启动的无害测试进程做受控验收，禁止拿用户正在工作的应用做样本。
 7. 验证系统保护行和其他用户行的结束符号不可用，Mac Resource Monitor 自身不进入批量候选，并显示正确限制说明。
+8. 若出现结束失败提示：必须能读到文案、不是红色、大约 3 秒后自己消失；关掉表再打开不得还挂着旧提示。
 
 真实菜单栏呈现和真实结束操作尚待每次影响本域的改动当次验证；本知识库不把历史构建或单测当成替代证据。
 
