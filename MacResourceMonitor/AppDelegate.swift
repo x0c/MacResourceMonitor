@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        // CLI 随包走：每次启动把包内 mrm 链到 ~/.local/bin，无需手动安装（只动用户目录，不碰已有实体文件）。
+        CLILinkManager.ensureLinked()
         // 图标即主入口：清掉历史显隐偏好，启动强制图标可见。
         UserDefaults.standard.removeObject(forKey: "menuBar.iconVisible")
         terminationGuard.isUpdateSessionInProgress = { [weak self] in

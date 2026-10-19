@@ -160,7 +160,21 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         } else {
             flags = arguments
         }
-        return flags == Self.arguments
+        if flags == Self.arguments { return true }
+        // Verified 2026-10-07: nettop rewrites its own argv at runtime — a sampler
+        // launched with `-J bytes_in,bytes_out` reads back from the kernel as
+        // `-J bytes_in`. Exact-equality above therefore never matches a live
+        // sampler, so orphan reaping and monitor-row folding silently did nothing.
+        // Match the streamer family instead: per-process delta mode (`-d -P -L`)
+        // with a `-J` column list containing network byte counters.
+        // Caller only kills orphans / foreign monitor children of the same UID,
+        // so a user's own foreground nettop is never matched here for killing.
+        guard flags.contains("-d"), flags.contains("-P"), flags.contains("-L"),
+              flags.contains("-J"),
+              let jIndex = flags.firstIndex(of: "-J"), jIndex + 1 < flags.count
+        else { return false }
+        let columns = flags[jIndex + 1].split(separator: ",")
+        return columns.contains(where: { $0 == "bytes_in" || $0 == "bytes_out" })
     }
 
     private static func listPIDs() -> [pid_t] {

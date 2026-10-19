@@ -164,6 +164,67 @@ final class DisplayClassifierTests: XCTestCase {
         XCTAssertFalse(appRow?.memberPIDs.contains(201) == true)
     }
 
+    func testAppleUserAppsCanBeEnded() {
+        let paths = [
+            "/System/Applications/Notes.app/Contents/MacOS/Notes",
+            "/System/Applications/TextEdit.app/Contents/MacOS/TextEdit",
+            "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor",
+            "/System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app/Contents/MacOS/Safari",
+            "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+        ]
+        for path in paths {
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            XCTAssertFalse(DisplayClassifier.isProtected(name: name, path: path, pid: 300), path)
+        }
+    }
+
+    func testAppleAgentsAndHelpersStayProtected() {
+        let paths = [
+            "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock",
+            "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+            "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow",
+            "/System/Library/PrivateFrameworks/AppSSO.framework/Support/AppSSOAgent.app/Contents/MacOS/AppSSOAgent",
+            "/System/Applications/Notes.app/Contents/PlugIns/com.apple.Notes.SpotlightIndexExtension.appex/Contents/MacOS/com.apple.Notes.SpotlightIndexExtension",
+            "/System/Applications/Notes.app/Contents/MacOS/NotARealExecutable"
+        ]
+        for path in paths {
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            XCTAssertTrue(DisplayClassifier.isProtected(name: name, path: path, pid: 300), path)
+        }
+    }
+
+    func testNotesBecomesEndableAppRowWithoutFoldingItsSystemHelpers() {
+        let notes = makeProcess(
+            pid: 300,
+            path: "/System/Applications/Notes.app/Contents/MacOS/Notes",
+            arguments: ["/System/Applications/Notes.app/Contents/MacOS/Notes"]
+        )
+        let indexer = makeProcess(
+            pid: 301,
+            path: "/System/Applications/Notes.app/Contents/PlugIns/com.apple.Notes.SpotlightIndexExtension.appex/Contents/MacOS/com.apple.Notes.SpotlightIndexExtension",
+            arguments: [],
+            responsible: 300
+        )
+        let rows = DisplayClassifier.rows(from: [notes, indexer], currentUID: 501, physicalMemory: 16 << 30)
+        let appRow = rows.first { $0.memberPIDs == [300] }
+        XCTAssertEqual(appRow?.kind, .desktopApp)
+        XCTAssertTrue(appRow?.canEnd == true)
+        XCTAssertFalse(appRow?.skipsBulkEnd == true)
+        XCTAssertTrue(rows.first { $0.memberPIDs == [301] }?.isSystemProtected == true)
+    }
+
+    func testFinderEndsAloneButSkipsBulkEnd() {
+        let finder = makeProcess(
+            pid: 310,
+            path: "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder",
+            arguments: ["/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"]
+        )
+        let rows = DisplayClassifier.rows(from: [finder], currentUID: 501, physicalMemory: 16 << 30)
+        XCTAssertTrue(rows.first?.canEnd == true)
+        XCTAssertTrue(rows.first?.skipsBulkEnd == true)
+        XCTAssertTrue(ProcessTerminationSelection.bulkCandidates(from: rows, excludingPID: 999).isEmpty)
+    }
+
     func testUsrSbinIsProtected() {
         XCTAssertTrue(
             DisplayClassifier.isProtected(
@@ -204,6 +265,30 @@ final class DisplayClassifierTests: XCTestCase {
             rows.first { $0.displayName == "Mac Resource Monitor" }?.memberPIDs.sorted(),
             [90, 91]
         )
+    }
+
+    func testLiveSamplerArgvAlsoFoldsIntoMonitor() {
+        let arguments = [
+            "/usr/bin/nettop", "-d", "-P", "-L", "0", "-s", "1", "-x", "-n",
+            "-J", "bytes_in"
+        ]
+        XCTAssertTrue(
+            NettopStreamSampler.isSamplerProcess(path: "/usr/bin/nettop", arguments: arguments)
+        )
+        let app = makeProcess(
+            pid: 90,
+            path: "/Applications/Mac Resource Monitor.app/Contents/MacOS/Mac Resource Monitor",
+            arguments: ["Mac Resource Monitor"]
+        )
+        let sampler = makeProcess(
+            pid: 91,
+            ppid: 1,
+            path: "/usr/bin/nettop",
+            arguments: arguments
+        )
+        let rows = DisplayClassifier.rows(from: [app, sampler], currentUID: 501, physicalMemory: 16 << 30)
+        XCTAssertFalse(rows.contains { $0.displayName == "0" })
+        XCTAssertEqual(rows.filter { $0.displayName == "Mac Resource Monitor" }.count, 1)
     }
 
     func testCPUPercentIsCappedAtOneHundred() {

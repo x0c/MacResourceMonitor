@@ -54,6 +54,23 @@ nonisolated enum DisplayClassifier {
     }
 
     static func toolHint(path: String, arguments: [String], executableName: String) -> String? {
+        // 编译型二进制（mrm / git / serve 等）：身份就是二进制自身；argv1 起是子命令
+        // （mrm doom、git status），禁止拿子命令当工具名，否则 mrm 会显示成 "doom"。
+        // 解释器（node / python / bash 等）才继续往后找脚本名。
+        if !isInterpreterName(executableName) {
+            let tokens = arguments.isEmpty ? [path] : arguments
+            guard let first = tokens.first else { return nil }
+            let base = basename(first)
+            if base.isEmpty { return nil }
+            if first.hasPrefix("-") { return nil }
+            if base.contains("=") || base.contains(",") { return nil }
+            if base.allSatisfy(\.isNumber) { return nil }
+            if isInterpreterName(base) { return nil }
+            // argv0 就是二进制自身（WindowServer / mrm / git）→ 不是具名脚本，返回 nil
+            // 调用方回退到 executableName。argv0 被改写（如测试里的 yes → 别名）才当 hint。
+            if base == executableName { return nil }
+            return base
+        }
         let tokens = arguments.isEmpty ? [path] : arguments
         for token in tokens {
             let base = basename(token)
@@ -70,14 +87,61 @@ nonisolated enum DisplayClassifier {
         return nil
     }
 
+    /// Apple apps ship under /System (Safari inside the App cryptex since Ventura).
+    private static let systemAppRoots = [
+        "/System/Applications/",
+        "/System/Volumes/Preboot/Cryptexes/App/System/Applications/",
+        "/System/Cryptexes/App/System/Applications/",
+        "/System/Library/CoreServices/",
+    ]
+
+    /// Single-row end is fine (macOS relaunches it), but bulk end / doom skip it.
+    private static let autoRelaunchedBundles: Set<String> = [
+        "/System/Library/CoreServices/Finder.app",
+    ]
+
     static func isProtected(name: String, path: String, pid: pid_t) -> Bool {
         if pid <= 1 { return true }
         if protectedNames.contains(name) { return true }
+        if isUserFacingSystemApp(path: path) { return false }
         if path.hasPrefix("/System/") { return true }
         if path.hasPrefix("/usr/libexec/") { return true }
         if path.hasPrefix("/usr/sbin/") { return true }
         if path.hasPrefix("/sbin/") { return true }
         return false
+    }
+
+    /// Main executable of a top-level Apple app with a regular activation policy
+    /// (Dock app, listed in Force Quit): no LSUIElement / LSBackgroundOnly.
+    /// Agents such as Dock, Control Center and loginwindow, framework-embedded
+    /// apps, extensions and XPC helpers stay protected.
+    static func isUserFacingSystemApp(path: String) -> Bool {
+        guard let root = systemAppRoots.first(where: { path.hasPrefix($0) }) else { return false }
+        let parts = path.dropFirst(root.count).split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 4 || parts.count == 5 else { return false }
+        if parts.count == 5, parts[0] != "Utilities", parts[0] != "Applications" { return false }
+        let appIndex = parts.count - 4
+        guard parts[appIndex].hasSuffix(".app"),
+              parts[appIndex + 1] == "Contents",
+              parts[appIndex + 2] == "MacOS" else { return false }
+        let bundlePath = root + parts[...appIndex].joined(separator: "/")
+        guard let info = Bundle(url: URL(fileURLWithPath: bundlePath))?.infoDictionary,
+              info["CFBundleExecutable"] as? String == String(parts[appIndex + 3]) else { return false }
+        return !isPlistTrue(info["LSUIElement"]) && !isPlistTrue(info["LSBackgroundOnly"])
+    }
+
+    static func relaunchesAutomatically(bundlePath: String?) -> Bool {
+        guard let bundlePath else { return false }
+        return autoRelaunchedBundles.contains(bundlePath)
+    }
+
+    private static func isPlistTrue(_ value: Any?) -> Bool {
+        switch value {
+        case let flag as Bool: return flag
+        case let number as NSNumber: return number.boolValue
+        case let text as String: return ["1", "true", "yes"].contains(text.lowercased())
+        default: return false
+        }
     }
 
     // MARK: - Keys

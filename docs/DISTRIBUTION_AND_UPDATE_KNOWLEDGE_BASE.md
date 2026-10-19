@@ -70,7 +70,7 @@ flowchart TD
 ### 公开发行链路
 
 1. 在 `Configuration/Base.xcconfig` 和 `project.yml` 同步设置营销版本与内部构建号；脚本先检查两份数值一致且内部构建号为正整数。
-2. `publish-release.sh` 生成 Xcode 工程并执行 Release 构建，然后以 Developer ID 对 Sparkle 的 XPC 服务、更新器、自动更新程序、框架和应用按由内到外的顺序重新签名。
+2. `publish-release.sh` 生成 Xcode 工程并执行 Release 构建（应用 target 依赖 `mrm` target，embed 阶段把 CLI 拷进包内 `Contents/MacOS/mrm`），然后以 Developer ID 对 Sparkle 的 XPC 服务、更新器、自动更新程序、框架、内嵌 `mrm` 和应用按由内到外的顺序重新签名；包里没有可执行的 `mrm` 就拒绝发布。Homebrew cask 用 `binary` 把包内 `mrm` 链到 PATH，应用每次启动也把包内 `mrm` 链到 `~/.local/bin/mrm`（只动用户目录）。
 3. 脚本检查签发者、时间戳、加固运行时和调试权限，随后公证应用并装订应用票据。
 4. 脚本打出更新 ZIP，用 Sparkle 工具生成并验证 `appcast.xml`：更新地址指向本次 GitHub Release，版本说明内嵌，清单带 EdDSA 签名。
 5. 脚本从已公证的应用创建 DMG，公证并装订 DMG；本地通过 Gatekeeper 与票据校验后才进入远端步骤。
@@ -80,7 +80,7 @@ flowchart TD
 
 **【排错】并发发版与 raw CDN 终检** → 全局权威：
 
-→ [macos-signing-notarization-distribution.md](/Users/geraltgraham/Codes/_standards/workspace-docs/swift-docs/macos-signing-notarization-distribution.md)「同一工作树禁止并行发版；raw CDN 滞后不是回滚信号」
+→ [macos-signing-notarization-distribution.md](~/Codes/_standards/workspace-docs/swift-docs/macos-signing-notarization-distribution.md)「同一工作树禁止并行发版；raw CDN 滞后不是回滚信号」
 
 本仓脚本名：`scripts/publish-release.sh`。产物目录与互斥按该文执行。
 
@@ -97,6 +97,8 @@ flowchart TD
 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | 右键菜单“检查更新…”动作的转发 | `StatusItemController.checkForUpdates(_:)` |
 | `MacResourceMonitor/Views/SettingsView.swift` | 设置窗口里的“检查更新…”按钮 | `SettingsView` |
 | `scripts/publish-release.sh` | 本地构建、签名、公证、发布与匿名终检 | `notarize_and_wait()`、`push_github_snapshot()` |
+| `tools/mrm/` | 命令行工具源码（独立 `mrm` target，随应用包 embed） | `main.swift`、`DoomEngine.swift`、`MRMVersion.swift`（版本读 `CREATE_INFOPLIST_SECTION_IN_BINARY` 内嵌的 Info.plist，跟 `Base.xcconfig` 自动一致；禁止再写死，2026-10-19 曾因写死导致 1.1.6 包内 `mrm` 仍报 1.1.5） |
+| `MacResourceMonitor/App/CLILinkManager.swift` | 启动时把包内 `mrm` 链到 `~/.local/bin/mrm` | `ensureLinked()` |
 | `scripts/publish-local.env.example` | 未入库的发行凭据配置模板 | 本地发行配置样例 |
 | `appcast.xml` | Sparkle 公开更新清单 | 更新版本条目 |
 | `README.md` | English storefront + install | Opening sentence, screenshots, `Install` |
@@ -110,14 +112,14 @@ flowchart TD
 
 | 场景 | 入口 | 类、方法或配置 | 说明 |
 |---|---|---|---|
-| 改工程结构、Swift Package、签名或 Release 构建设置 | `project.yml` | `settings.configs.Release`、`packages.Sparkle` | 这是唯一工程来源；改后必须生成工程，不手改派生工程。 |
+| 改工程结构、Swift Package、签名或 Release 构建设置 | `project.yml` | `settings.configs.Release`、`packages.Sparkle`、`mrm` target、`Embed mrm CLI` 阶段 | 这是唯一工程来源；改后必须生成工程，不手改派生工程。应用 target 依赖 `mrm`，embed 阶段把 CLI 拷进包内。 |
 | 改公开版本或内部构建号 | `Configuration/Base.xcconfig` 与 `project.yml` | `MARKETING_VERSION`、`CURRENT_PROJECT_VERSION` | 两处必须同步；脚本会在构建前中止不一致发布。 |
 | 改自动检查、更新清单地址或更新验证要求 | `MacResourceMonitor/Info.plist` | `SUFeedURL`、`SUPublicEDKey`、`SUEnableAutomaticChecks`、`SUAutomaticallyUpdate`、`SURequireSignedFeed`、`SUVerifyUpdateBeforeExtraction` | 这些键决定已安装应用从哪里取清单及其安全边界。 |
 | 改 Sparkle 生命周期或主动检查行为 | `MacResourceMonitor/App/AppUpdater.swift` | `AppUpdater.init()`、`AppUpdater.checkForUpdates(_:)` | 必须长期持有控制器，菜单入口只委托 Sparkle，不重写其安装流程。 |
 | 改更新期间的退出策略或检查入口接线 | `MacResourceMonitor/AppDelegate.swift` | `applicationDidFinishLaunching(_:)`、`applicationShouldTerminate(_:)`、`checkForUpdates()` | 将更新会话状态交给终止守卫，并把用户操作转给 `AppUpdater`。 |
 | 改右键入口文字或事件转发 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.checkForUpdates(_:)` | 用户可见入口属于菜单栏域；此处只确认它最终转发到更新动作。 |
 | 改设置窗口的检查入口 | `MacResourceMonitor/Views/SettingsView.swift` | 更新按钮动作 | 同样调用 `AppDelegate.checkForUpdates()`。 |
-| 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。 |
+| 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。含内嵌 `mrm` 的 Developer ID 重签与逐个核验，cask 用 `binary` 链 CLI。 |
 | 改公开更新内容 | `appcast.xml` | Sparkle item 与签名尾部 | 必须由 Sparkle 工具生成和验证，不能手改后直接发布。 |
 | 改用户安装路径或安装说明 | `README.md`、`README.zh-CN.md` | Install / 安装段 | 英文说明为权威安装结构，中文说明保持同等渠道与边界。 |
 | 改 GitHub 默认可发现性 | GitHub About description + Topics (API/settings, not git) and README opening | First sentence of description | Default search scans **name, description, Topics only**. Frozen need queries: `macos cpu menu bar`, `macos kill process menu bar`, `macos menu bar cpu monitor`. Near-miss → rewrite that first sentence (`macOS … in your menu bar`); do not rename; do not treat a miss on `kill process` as total absence (port-killer noise). Honest **macOS 26+**. Pushing README does not update About. |
@@ -150,6 +152,8 @@ flowchart TD
 - 【必须】Xcode 工程只改 `project.yml`，改后 XcodeGen 重生（`MacResourceMonitor.xcodeproj` 是派生产物）。
 - **AI 易错点** 营销版本与内部构建号须同步改 `Configuration/Base.xcconfig` 与 `project.yml`（脚本会拦不一致）。
 - **AI 易错点** 禁止用 Debug / ad-hoc 覆盖 `/Applications` 里的 Developer ID 包；覆盖安装先删再整包 `ditto`（见 swift 基线）。
+- **AI 易错点** 新增的 tool 类型 target 不可沿用空签名标识（Release 报 `An empty code signing identity is not valid`）：`mrm` 在 `project.yml` 用 `Automatic` + `Apple Development` 单独覆盖基座的 Manual + Developer ID；包内产物的 Developer ID 重签由发版脚本执行（原因：基座 Release 签名设置会被 target 继承，与 Automatic 冲突）。
+- **AI 易错点** 应用对 `mrm` 的 target 依赖必须 `embed: false`：默认 xcodegen 会把 tool 产物再拷一份进 `Contents/Resources`（实测 `mrm in Resources`），那份发版脚本不重签、公证打回；拷贝只走 `Embed mrm CLI` 阶段进 `Contents/MacOS`。
 - 【接线】`AppUpdater` 长期持有 Sparkle 控制器；`AppDelegate` 把 `sessionInProgress` 交给 `TerminationGuard`；右键/设置「检查更新…」只转发，不重写安装流程。
 - 【禁止】手改已签名 `appcast.xml`；必须用本仓 `scripts/publish-release.sh` 调用的 Sparkle 工具生成并校验。
 - 【必须】公开快照走 `push_github_snapshot()`，禁止把私有 origin 历史/内网地址推到 `x0c/MacResourceMonitor`；发布前按公开仓规则做泄漏扫描。
@@ -168,7 +172,7 @@ flowchart TD
    xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release -destination 'platform=macOS' -derivedDataPath build/DerivedData build
    ```
 
-   检查构建结束并产出 `build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`。此命令不等于完成 Developer ID 签名或公证。
+   检查构建结束并产出 `build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`，且包内 `Contents/MacOS/mrm` 存在（embed 阶段产物，缺失就拒绝发版）。此命令不等于完成 Developer ID 签名或公证。
 
 2. 改版本后，先核对双轨版本是否一致，避免把不一致留到长时间构建之后才失败：
 

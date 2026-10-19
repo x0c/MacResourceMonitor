@@ -35,10 +35,14 @@ actor ProcessSampler {
     private let logicalCores: Int
     private let physicalMemory: UInt64
 
-            init() {
+            init(reapOrphans: Bool = true) {
                 self.logicalCores = max(ProcessInfo.processInfo.processorCount, 1)
                 self.physicalMemory = Self.readPhysicalMemory()
-                NettopStreamSampler.reapOrphanedSamplers()
+                // CLI (mrm doom) must not reap: its own PID differs from the menu-bar app,
+                // so the app's live nettop child would look "foreign" and be killed.
+                if reapOrphans {
+                    NettopStreamSampler.reapOrphanedSamplers()
+                }
             }
 
     var memoryBytes: UInt64 { physicalMemory }

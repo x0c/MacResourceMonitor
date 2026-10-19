@@ -71,11 +71,25 @@ open "/Applications/Mac Resource Monitor.app"
 
 If this unstuck a Mac, a star on the repo helps other people find it.
 
+### Command line: mrm doom
+
+Same table, same safety rules, from the terminal (ships inside the app, linked to `~/.local/bin/mrm` on first launch — nothing to install by hand):
+
+```bash
+mrm ps --dry-run 2>/dev/null   # preview only, nothing killed
+mrm doom --dry-run             # preview the quiet-down plan
+mrm doom                       # TTY asks once, then ends everything closable
+mrm doom --yes --json > /tmp/doom.json  # scripts/agents: --yes required, capture with redirect (not pipes)
+mrm status                     # verify it stayed quiet
+```
+
+doom only ends your own non-system rows and always keeps mrm itself, your terminal chain (including its terminal GUI), the menu-bar monitor and its sampler, Finder (macOS relaunches it), plus anything named by repeatable `--exclude`. `--include-caller` / `--include-monitor` opt back in.
+
 ## Features
 
 - Flat table of the processes that actually matter, with human names (ChatGPT stays ChatGPT, not `node`)
 - Whole-machine CPU % (capped at 100%) and physical memory %
-- One-click end for your own processes; system processes stay listed but cannot be killed
+- One-click end for your own processes, including Apple apps such as Safari, Notes and Mail; system services stay listed but cannot be killed
 - Freeze toggle (English **Freeze** / Chinese **冻结**, off by default) keeps row order steady while numbers keep updating; tapping a column header sorts and turns Freeze off; hovering End pins that row
 - Network list keeps a recent frame and avoids a loading screen; heavy per-process sampling stops while the panel is closed; quiet processes stay at `0 KB/s` briefly instead of flickering out
 - Menu bar dual ring keeps updating even when the table is closed or frozen

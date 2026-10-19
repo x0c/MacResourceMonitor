@@ -209,6 +209,12 @@ codesign --force --options runtime --timestamp \
 codesign --force --options runtime --timestamp \
   --sign "${SIGN_IDENTITY}" "${APP_PATH}/Contents/Frameworks/Sparkle.framework" \
   || die "重签 Sparkle.framework 失败"
+# 包内自带的 mrm 命令行：embed 阶段已拷入，必须同顺序重签，否则公证按未签名打回。
+[[ -x "${APP_PATH}/Contents/MacOS/mrm" ]] \
+  || die "包里没有 mrm（检查 Embed mrm CLI 阶段），拒绝发布缺 CLI 的版本"
+codesign --force --options runtime --timestamp \
+  --sign "${SIGN_IDENTITY}" "${APP_PATH}/Contents/MacOS/mrm" \
+  || die "重签内嵌 mrm 失败"
 codesign --force --options runtime --timestamp \
   --sign "${SIGN_IDENTITY}" "${APP_PATH}" \
   || die "重签 ${APP_BUNDLE}.app 失败"
@@ -232,7 +238,8 @@ fi
 for nested in "${sparkle_fw_dir}/XPCServices/Downloader.xpc" \
               "${sparkle_fw_dir}/XPCServices/Installer.xpc" \
               "${sparkle_fw_dir}/Updater.app" \
-              "${sparkle_fw_dir}/Autoupdate"; do
+              "${sparkle_fw_dir}/Autoupdate" \
+              "${APP_PATH}/Contents/MacOS/mrm"; do
   nested_info="$(codesign -dv --verbose=2 "${nested}" 2>&1)"
   grep -q "Authority=${SIGN_IDENTITY}" <<<"${nested_info}" \
     || die "嵌套组件不是 Developer ID 签名：${nested}"
@@ -255,10 +262,13 @@ release_notes_file="${work_dir}/release-notes.md"
 cat > "${release_notes_file}" <<EOF
 Mac Resource Monitor ${version}
 
-- Drag the bottom edge of the process list to change its height. The height is remembered the next time you open it, and it will not go past the bottom of the visible screen.
-- End-failure notices are quiet and disappear after a few seconds instead of staying on the table in red.
-- Click the menu-bar rings for the CPU and memory list, or click upload/download for the matching network-activity list.
-- Network activity refreshes every second, stays in step with the menu-bar readings, and never opens to a blank panel.
+- Apple apps you use, such as Safari, Notes, Mail and TextEdit, can now be ended like any other app. System services stay locked. Finder can be ended on its own row (macOS reopens it) but is skipped by "end all" and \`mrm doom\`.
+- New \`mrm\` command line, bundled with the app: \`mrm ps\`, \`mrm status\`, and \`mrm doom\` to end everything closable in one go.
+- Fixed leftover network samplers that could keep a CPU core busy after the network list closed.
+
+- 现在可以像其他 App 一样结束 Safari、备忘录、邮件、文本编辑等苹果自带 App；系统服务仍然锁定。访达可以单行结束（系统会自动重开），但「全部结束」和 \`mrm doom\` 会跳过它。
+- 新增随应用自带的 \`mrm\` 命令行：\`mrm ps\`、\`mrm status\`，以及一键结束所有可结束项的 \`mrm doom\`。
+- 修复网络表关闭后，残留的网速采样仍可能占满一个 CPU 核心的问题。
 EOF
 
 appcast_dir="${work_dir}/appcast"
@@ -398,8 +408,12 @@ cask "${CASK_NAME}" do
 
   app "${APP_BUNDLE}.app"
 
+  # 包内自带的 mrm 命令行：brew 安装/升级时自动链到 PATH，无需手动装。
+  binary "#{appdir}/${APP_BUNDLE}.app/Contents/MacOS/mrm", target: "mrm"
+
   zap trash: [
     "~/Library/Preferences/top.caozc.MacResourceMonitor.plist",
+    "~/.local/bin/mrm",
   ]
 end
 EOF

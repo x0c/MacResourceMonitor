@@ -48,6 +48,8 @@ nonisolated struct ProcessRow: Identifiable, Sendable, Hashable {
 
     var memberPIDs: [pid_t] { memberIdentities.map(\.pid) }
     var canEnd: Bool { isCurrentUser && !isSystemProtected }
+    /// Finder: endable on its own row, but bulk end / doom must leave it alone.
+    var skipsBulkEnd: Bool { DisplayClassifier.relaunchesAutomatically(bundlePath: bundlePath) }
 
     var revealPath: String {
         switch kind {

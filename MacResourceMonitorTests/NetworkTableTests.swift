@@ -66,6 +66,12 @@ final class NettopStreamSamplerParseTests: XCTestCase {
             )
         )
         XCTAssertTrue(NettopStreamSampler.matchesSamplerArguments(NettopStreamSampler.arguments))
+        XCTAssertTrue(
+            NettopStreamSampler.matchesSamplerArguments(
+                ["/usr/bin/nettop", "-d", "-P", "-L", "0", "-s", "1", "-x", "-n", "-J", "bytes_in"]
+            ),
+            "nettop 会改写自身 argv（实测 `-J bytes_in,bytes_out` 读回是 `-J bytes_in`），必须同样被识别清理"
+        )
         XCTAssertFalse(
             NettopStreamSampler.matchesSamplerArguments(
                 ["/usr/bin/nettop", "-d", "-P", "-L", "2", "-s", "1"]

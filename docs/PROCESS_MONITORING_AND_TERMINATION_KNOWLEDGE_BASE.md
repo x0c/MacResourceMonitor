@@ -166,6 +166,7 @@ sequenceDiagram
 | `MacResourceMonitor/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
 | `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、单项/批量结束触发、确认、行右键、悬停钉位入口和结束失败提示 | `ProcessTableView.swift`、`ProcessRowView.swift`、`NetworkRowView.swift`、`MonitorTableRowChrome.swift`、`BulkEndButton.swift`、`EndFailureBanner.swift` |
 | `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护、CPU 上限和失败提示自动消失 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`、`TransientStatusMessageTests.swift` |
+| `tools/mrm/` | 命令行 `mrm` 与 `doom` 规划/执行，复用本域采样、归类与结束边界 | `DoomEngine.swift`（`planDoom` / `executeDoom`）、`main.swift`、`MRMOutput.swift` |
 | `docs/` | 本域产品行为权威契约及本知识库 | `PRODUCT_CONTRACT.md` 与本文件，2 个文件 |
 
 ## §3 本域代码入口索引
@@ -180,6 +181,7 @@ sequenceDiagram
 | 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `MacResourceMonitor/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
 | 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
 | 修改结束权限、单项/批量强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()`、`endAll()` | 复核成员身份与安全标记后直接强制结束。 |
+| 修改 doom 候选、额外排除或杀后核验 | doom 规划与执行 | `tools/mrm/DoomEngine.swift` · `planDoom()`、`executeDoom()`、`callerProtectedPIDs()` | 在 `canEnd` 之上再排除自身、调用方终端链（含终端 GUI）、监控与 nettop 采样；杀后按存活重读核验；输出用重定向接，管道 helper 会被一起结束（行为权威见产品契约命令行节）。 |
 | 修改结束失败提示的停留、颜色或关闭时机 | 表底短暂提示 | `MacResourceMonitor/Services/TransientStatusMessage.swift`、`MacResourceMonitor/Views/EndFailureBanner.swift` | 必须让用户看见失败，但用次要色、约 3 秒自动消失；收起浮层立刻拿掉。禁止改回红色常驻条。 |
 | 修改表头、批量结束确认、冻结开关或排序点击 | 表格视图 | `MacResourceMonitor/Views/ProcessTableView.swift`、`NetworkTableView.swift`、`BulkEndButton.swift` | 连接主状态与表头互动，并固定确认时的批量候选快照。 |
 | 修改结束图标、禁用状态、悬停或行内视觉 | 行视图 | `MacResourceMonitor/Views/ProcessRowView.swift` · `endButton`、`helpText()` | 只把当前行状态映射到 UI 与回调。 |
@@ -222,6 +224,8 @@ sequenceDiagram
 - **AI 易错点**【禁止】为了保留“礼貌退出”重新加回 SIGTERM 或应用正常退出等待 -> 单行和批量都必须立即发送 SIGKILL；结果核验等待不得放在信号发送之前（原因：本产品的结束动作已明确裁定为强制结束）。
 - **AI 易错点**【禁止】把系统保护进程按责任 PID 折进桌面应用行 -> `rowKey` 必须让保护进程独立成行（原因：结束应用时的成员信号会连带打到系统助手）。
 - **AI 易错点**【禁止】把 argv0 等于可执行短名当成「具名工具」hint -> `toolHint` 必须跳过该情况（原因：WindowServer 等短名会误放开分类边界）。
+- **AI 易错点**【禁止】把编译型二进制的子命令当成工具名 -> 非解释器可执行文件（`mrm` / `git` / `serve` 等）只看 argv0：argv0 即二进制自身时 `toolHint` 返回空、显示回退到可执行名；只有解释器（node / python / bash 等）才继续往后找脚本名（原因：`mrm doom` 会把 mrm 显示成 `doom`；2026-09-23 实测。argv0 被改写仍当 hint，`testStandaloneToolLaunchedFromCursorIsNotFolded` 为证）。
+- 【隐性依赖】`ProcessSampler` 默认构造会收割孤儿 nettop 采样；菜单栏应用之外的第二个采样者（`mrm` 等 CLI）必须传 `reapOrphans: false`（原因：CLI 的 PID 与应用不同，应用的存活采样在其视角里是“别人的孩子”，会被当孤儿杀掉，菜单栏网络表随即断流）。
 - **AI 易错点**【禁止】把纯数字或逗号分隔的采样参数当成具名工具 -> `toolHint` 必须跳过 `0` / `1` 和 `bytes_in,bytes_out` 这类 token（原因：网络表采样命令带 `-L 0`，会把两行显示成黑图标「0」并各占约一核）。
 - **AI 易错点**【禁止】从 Unix 父子关系直接画进程树或把一切孩子都折叠 -> 必须通过责任 PID、包路径、参数和明确的家族规则形成平表（原因：产品不做进程树，且 Cursor 启动的独立工具不能被折进 Cursor）。
 - **AI 易错点**【禁止】只在按钮上禁用系统行或其他用户行 -> 必须同时保留 `ProcessTerminator.end()` 的二次拦截（原因：UI 只是入口，结束器仍是最后的权限边界）。
@@ -235,6 +239,8 @@ sequenceDiagram
 - 【隐性语义】`ProcessListModel.refresh()` 对 `isRefreshing` 的保护使同一时刻只允许一个刷新；新增异步入口时不要绕开它并直接覆写 `rows`。
 - 【隐性语义】`ArgumentCache` 仅在某一 `ProcessIdentity` 第一次出现时读取参数，并在快照完成后按存活身份清理；新增参数识别规则不能改成每秒读取全机参数。
 - 【禁止】将系统保护只按展示名称判断 -> 必须保留 PID、保护名称和系统路径三类保护线索，且路径须覆盖 `/System/`、`/usr/libexec/`、`/usr/sbin/`、`/sbin/`（原因：WindowServer 等短名可能被误判为普通具名工具；`/usr/sbin` 不在旧前缀里）。
+- **AI 易错点**【禁止】仅凭 `/System/` 路径前缀锁死苹果自带 App -> `DisplayClassifier.isProtected()` 必须先放行 `isUserFacingSystemApp()`：系统应用目录（含 Safari Cryptex 实体路径）或 `CoreServices` 的顶层 `.app` 主可执行文件，Info.plist 无 `LSUIElement`/`LSBackgroundOnly`，且不在 `protectedNames`（原因：2026-10-19 Safari/备忘录因路径在 `/System/` 下被锁死；Ventura 起 Safari 实体在 `/System/Volumes/Preboot/Cryptexes/App/...`）。只读 Info.plist 是官方口径：激活策略由 Info.plist 决定，Regular 即程序坞普通 App。框架内 `.app`（AppSSOAgent、sociallayerd 也没声明 LSUIElement）必须靠「顶层 + 目录白名单」挡住。
+- 【隐性语义】访达是系统自动重开的 App：`ProcessRow.skipsBulkEnd` 为真时单行可结束，但 `ProcessTerminationSelection.bulkCandidates()` 与 `planDoom()` 必须跳过（`mrm` 理由 `relaunches`）。
 - 【禁止】把失败的结束结果吞掉 -> 必须让 `ProcessListModel.end()` 写入本地化失败信息并刷新（原因：用户需要知道仍有成员存活，而不是误以为已结束）。
 - **AI 易错点**【禁止】把结束失败提示做成一直占着的红条 -> 必须用次要色、大约 3 秒自动消失，收起浮层也立刻拿掉（原因：用户 2026-09-19 明确否决常驻红色横幅；失败仍要被看见，但不能压着表底不走）。
 - **AI 易错点**【禁止】新一次失败提示被上一次的自动关闭清掉 -> 必须作废上一轮定时（原因：连点结束时旧定时器会把新提示提前拿走）。
@@ -320,5 +326,6 @@ xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme Ma
 - 用户说“前两行叫 0”“黑图标占 CPU”“是不是监视器自己”时，先查本应用留下的按进程网速采样是否已脱离、是否被参数 `0` 当成了名字。
 - 用户说“结束不了”“不该能结束”“点错行”时，先检查当前用户、系统保护、成员 PID、钉位和结束后的存活检测。
 - 用户说“刷新关了还在跳”“悬停结束时位置变了”时，先检查名单覆盖条件与钉位的失效和插入逻辑。
+- 用户说“mrm 显示成了 doom / ps”“git 显示成了 status”时，先检查 `toolHint` 是否把编译型二进制的子命令当成了工具名（只有解释器才往后找脚本）。
 
 <!-- 该文档整理/压缩于 2026-09-05 -->

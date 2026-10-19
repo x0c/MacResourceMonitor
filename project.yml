@@ -23,8 +23,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: SHZQ3MWP3B
-    CURRENT_PROJECT_VERSION: 41
-    MARKETING_VERSION: 1.1.5
+    CURRENT_PROJECT_VERSION: 42
+    MARKETING_VERSION: 1.1.6
     COMBINE_HIDPI_IMAGES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     SWIFT_STRICT_CONCURRENCY: complete
@@ -69,6 +69,34 @@ fileGroups:
   - design
 
 targets:
+  mrm:
+    type: tool
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: tools/mrm
+      - path: MacResourceMonitor/Models/ProcessRow.swift
+      - path: MacResourceMonitor/Models/NetworkProcessRow.swift
+      - path: MacResourceMonitor/Services/DisplayClassifier.swift
+      - path: MacResourceMonitor/Services/ProcessSampler.swift
+      - path: MacResourceMonitor/Services/ArgumentCache.swift
+      - path: MacResourceMonitor/Services/Responsibility.swift
+      - path: MacResourceMonitor/Services/CPUTime.swift
+      - path: MacResourceMonitor/Services/NettopStreamSampler.swift
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: mrm
+        PRODUCT_NAME: mrm
+        PRODUCT_BUNDLE_IDENTIFIER: top.caozc.MacResourceMonitor.mrm
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: NO
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: Apple Development
   MacResourceMonitor:
     type: application
     platform: macOS
@@ -82,6 +110,18 @@ targets:
       - path: MacResourceMonitor/AppIcon.icon
     entitlements:
       path: MacResourceMonitor/MacResourceMonitor.entitlements
+    postbuildScripts:
+      - name: Embed mrm CLI
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          MRM_SRC="${BUILT_PRODUCTS_DIR}/mrm"
+          APP_BIN_DIR="${CODESIGNING_FOLDER_PATH}/Contents/MacOS"
+          if [[ -f "${MRM_SRC}" ]]; then
+            cp -f "${MRM_SRC}" "${APP_BIN_DIR}/mrm"
+          else
+            echo "warning: mrm not found at ${MRM_SRC}; skipping embed"
+          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: top.caozc.MacResourceMonitor
@@ -101,6 +141,10 @@ targets:
           - $(inherited)
           - "@executable_path/../Frameworks"
     dependencies:
+      # embed 关掉：mrm 只借构建顺序，拷包走下面的 Embed mrm CLI 脚本；
+      # 否则 xcodegen 会再拷一份未签名的 mrm 进 Contents/Resources，公证打回。
+      - target: mrm
+        embed: false
       - package: Sparkle
         product: Sparkle
       - package: MacKit

@@ -12,6 +12,7 @@ nonisolated enum ProcessTerminationSelection {
         var seenRowIDs: Set<String> = []
         return rows.filter { row in
             row.canEnd
+                && !row.skipsBulkEnd
                 && !row.memberPIDs.contains(excludingPID)
                 && seenRowIDs.insert(row.id).inserted
         }

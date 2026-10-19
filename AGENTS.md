@@ -1,8 +1,8 @@
 <!-- managed:inherited-agents:start -->
-<!-- source: /Users/geraltgraham/Codes/MacResourceMonitor/AGENTS.md -->
+<!-- source: ~/Codes/MacResourceMonitor/AGENTS.md -->
 # Mac Resource Monitor
 
-通用工程规范：[Swift 规范](/Users/geraltgraham/Codes/_standards/swift.md)
+通用工程规范：[Swift 规范](~/Codes/_standards/swift.md)
 
 Mac Resource Monitor 是本机极简资源表：一眼看到哪些应用占用整机 CPU、内存或网络，并可立即结束。
 
@@ -18,7 +18,7 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 
 ## 钉死的体验
 
-- **【裁定 2026-09-08 · 执行】正式产品名 Mac Resource Monitor**；身份、公开仓、一键安装与本机产品根目录的零残留映射见 [app-macos/docs/PRODUCT_CONTRACT.md](app-macos/docs/PRODUCT_CONTRACT.md)。
+- **【裁定 2026-09-08 · 执行】正式产品名 Mac Resource Monitor**；身份、公开仓、一键安装与本机产品根目录的零残留映射见 [app-macos/docs/PRODUCT_CONTRACT.md](~/Codes/MacResourceMonitor/app-macos/docs/PRODUCT_CONTRACT.md)。
 - 极简平表：图标、人话名、整机 CPU%、内存%、结束。不要进程树，不要展开孩子。
 - **菜单栏应用**：程序坞没有图标，没有常驻桌面进程表工作区。左键打开点开结束的表，表出现在菜单栏图标正下方，点外面关；右键才是开机自启 / 打开主窗口 / 设置 / 检查更新 / 退出。**图标即主入口：禁止隐藏菜单栏图标**（菜单与设置都不得提供该项；启动强制图标可见）。禁止把菜单常挂在状态项上。禁止因拿不到图标坐标而掉到屏幕角落。设置窗仅作偏好与「打开主窗口」入口，**不是**藏图标后的恢复面。
 - **【裁定 2026-09-05】登录项静默**：开机自启拉起时只后台就绪，禁止自动弹出设置窗 / 恢复窗；用 MacKit `LoginLaunchDetector.isLaunchedAsLoginItem` 传入 `MenuBarReopenPolicy`。
@@ -116,6 +116,7 @@ rm -rf "/Applications/Mac Resource Monitor.app"
 ditto "build/DerivedData/Build/Products/Release/Mac Resource Monitor.app" "/Applications/Mac Resource Monitor.app"
 xattr -dr com.apple.quarantine "/Applications/Mac Resource Monitor.app" 2>/dev/null || true
 open "/Applications/Mac Resource Monitor.app"
+sleep 1; ~/.local/bin/mrm version # 应用启动时已把包内 mrm 链到 ~/.local/bin
 ```
 
 要管理员密码：免密失败立刻停。对外发版：`scripts/publish-release.sh`（发版前 `leakgate.py scan --profile public`）。首次安装：GitHub Release 公证 dmg 或 `brew tap x0c/tap && brew install --cask mac-resource-monitor`；更新源 `appcast.xml`。

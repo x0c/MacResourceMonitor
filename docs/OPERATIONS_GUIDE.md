@@ -29,6 +29,8 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
 
 改菜单栏 / 进程表 / 网速后，仍要跑受影响的完整测试组。自动测试通过 ≠ 安装版菜单栏 / 结束 / 签名验收。
 
+**保留警告（2026-10-19 评估）**：`appintentsmetadataprocessor … Metadata extraction skipped, no AppIntents.framework dependency found` 来自 Xcode 构建步骤，不是源码诊断。来源：本应用不链接 App Intents（基线 B5 豁免）。风险：无。后续：只有真的接入 App Intents 时这条才会消失，不要为了消警告去加空依赖。其余 Swift 编译警告应为零。
+
 ## 覆盖安装
 
 产物：`build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`
@@ -39,6 +41,7 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
 rm -rf '/Applications/Mac Resource Monitor.app'
 ditto 'build/DerivedData/Build/Products/Release/Mac Resource Monitor.app' '/Applications/Mac Resource Monitor.app'
 open '/Applications/Mac Resource Monitor.app'
+sleep 1; ~/.local/bin/mrm version # 应用启动时已把包内 mrm 链到 ~/.local/bin
 ```
 
 要管理员授权 → 立刻停，禁止弹图形授权。禁止用 Debug / 临时签名覆盖 Developer ID 安装版。
