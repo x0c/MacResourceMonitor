@@ -33,13 +33,13 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor \
 
 ## 覆盖安装
 
-产物：`build/DerivedData/Build/Products/Release/Mac Resource Monitor.app`
+Official install artifact: `build/Export/Mac Resource Monitor.app`, produced by `scripts/publish-release.sh` through universal archive and Developer ID export. The ordinary development build path above is not the installable distribution artifact. Commit source before replacement; verify the export signature and installed version after copying.
 
 仅在「应用程序」可无交互写入时：
 
 ```bash
 rm -rf '/Applications/Mac Resource Monitor.app'
-ditto 'build/DerivedData/Build/Products/Release/Mac Resource Monitor.app' '/Applications/Mac Resource Monitor.app'
+ditto 'build/Export/Mac Resource Monitor.app' '/Applications/Mac Resource Monitor.app'
 open '/Applications/Mac Resource Monitor.app'
 sleep 1; ~/.local/bin/mrm version # 应用启动时已把包内 mrm 链到 ~/.local/bin
 ```
@@ -70,3 +70,7 @@ sleep 1; ~/.local/bin/mrm version # 应用启动时已把包内 mrm 链到 ~/.lo
 签名、公证、DMG、GitHub Release、Homebrew、在线更新、真实结束进程 → 须按发行 / 领域流程另验。
 
 <!-- 该文档整理/压缩于 2026-09-05 -->
+
+## Native Settings acceptance (2026-10-19)
+
+The primary inspected all four actual Debug Settings windows: English/Chinese in light/dark, 480 × 234, without scrolling, clipping or custom focus frames. The full app name, version, both native switches and update/quit buttons fit. Dark inspection uses the Debug-only public application appearance override, not a system appearance change; Release omits that flag. Explicit application reopen exercised the native Settings presenter. The Debug build, static analysis and all 80 existing tests pass with complete diagnostics at `/tmp/mac-resource-monitor-settings-validation-final.log`; the only warning is the App Intents tooling notice assessed above. This is static layout evidence under lock: physical keyboard/Escape/VoiceOver, real pending-login approval and live toggle behavior remain unverified. Neither login nor network preferences were changed for capture. Final installed Release evidence and publication follow after archive/export.

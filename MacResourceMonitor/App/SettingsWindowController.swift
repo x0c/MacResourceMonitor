@@ -3,38 +3,76 @@ import MacKitLifecycle
 import SwiftUI
 
 @MainActor
-final class SettingsWindowController: NSObject, NSWindowDelegate {
+final class SettingsWindowController {
     static let shared = SettingsWindowController()
-    private static let frameAutosaveName = "MacResourceMonitor.Recovery"
+    var present: (() -> Void)?
 
-    private var window: NSWindow?
+    private weak var window: NSWindow?
     private let activationSession = AccessoryActivationSession()
+    private var observers: [NSObjectProtocol] = []
 
     func show() {
-        if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView())
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 320),
-                styleMask: [.titled, .closable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = String(localized: "settings.title")
-            window.contentViewController = hosting
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            window.center()
-            // 先落到屏幕中央，再按已记住的位置恢复；键不存在时不会钉在角落。
-            window.setFrameAutosaveName(Self.frameAutosaveName)
-            self.window = window
-        }
-
-        activationSession.beginIfAccessory()
-        window?.makeKeyAndOrderFront(nil)
-        window?.orderFrontRegardless()
+        present?()
+        NSApp.activate()
     }
 
-    func windowWillClose(_ notification: Notification) {
-        activationSession.endIfNeeded()
+    func close() {
+        window?.performClose(nil)
+    }
+
+    func attach(_ window: NSWindow) {
+        guard self.window !== window else { return }
+        observers.forEach(NotificationCenter.default.removeObserver)
+        self.window = window
+        window.title = String(localized: "settings.title")
+        window.setFrameAutosaveName("MacResourceMonitor.Recovery")
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    Self.shared.activationSession.beginIfAccessory()
+                    Self.shared.clampToScreen()
+                }
+            },
+            center.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { _ in
+                MainActor.assumeIsolated { Self.shared.clampToScreen() }
+            },
+            center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+                MainActor.assumeIsolated { Self.shared.activationSession.endIfNeeded() }
+            }
+        ]
+        if window.isKeyWindow { activationSession.beginIfAccessory() }
+        DispatchQueue.main.async { self.clampToScreen() }
+    }
+
+    private func clampToScreen() {
+        guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        var frame = window.frame
+        frame.origin.x = min(max(frame.minX, visible.minX), max(visible.minX, visible.maxX - frame.width))
+        frame.origin.y = min(max(frame.minY, visible.minY), max(visible.minY, visible.maxY - frame.height))
+        if frame.origin != window.frame.origin { window.setFrame(frame, display: true) }
+    }
+}
+
+struct SettingsWindowObserver: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowView { WindowView() }
+    func updateNSView(_ nsView: WindowView, context: Context) {}
+
+    final class WindowView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { SettingsWindowController.shared.attach(window) }
+        }
+    }
+}
+
+struct SettingsPresenterCommands: Commands {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some Commands {
+        CommandGroup(after: .appSettings) {
+            Color.clear.frame(width: 0, height: 0)
+                .onAppear { SettingsWindowController.shared.present = { openSettings() } }
+        }
     }
 }

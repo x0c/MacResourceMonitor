@@ -102,7 +102,7 @@ graph TD
 ### 路径四：设置窗与登录静默（禁止藏图标）
 
 1. **【裁定 2026-09-05】** 产品禁止隐藏菜单栏图标：右键无「隐藏菜单栏图标」，设置无「显示菜单栏图标」，不持久化图标显隐。
-2. 用户主动选「打开主窗口」或「设置」时，`SettingsWindowController.show()` 出示带标题栏窗口：仍在工作、开机自启、检查更新；位置用保存名恢复。
+2. 用户主动选「打开主窗口」或「设置」时，`SettingsWindowController.show()` 打开同一个原生 Settings 窗口；显示网速、开机自启、检查更新、退出与菜单对等，布局以产品契约 Settings visual composition 为准。位置沿用已有保存名并夹在当前可见屏幕内。
 3. 登录项拉起：`LoginLaunchDetector.isLaunchedAsLoginItem == true` 时，`MenuBarReopenPolicy` 返回不弹窗；禁止 `showRecoveryWindow` / `SettingsWindowController.show`。
 4. 用户从应用程序 / Spotlight 再次打开时：按全局【裁定 2026-09-07】，本产品属菜单栏即主入口——就绪后默认 60 秒内 reopen 须出设置窗（`menubarIsPrimaryEntry: true` + `secondsSinceReady`），**与图标始终可见无关**；超时且图标可见可不自动弹窗。登录拉起仍静默。设置窗须含右键对等能力（含**检查更新**）。
 5. 关闭设置窗只结束窗口激活会话，不退出应用。

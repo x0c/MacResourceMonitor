@@ -224,49 +224,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac Resource Monitor"
+            "value": "Mac Resource Monitor Settings"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac Resource Monitor"
-          }
-        }
-      }
-    },
-    "settings.status": {
-      "comment": "Recovery window status section",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Status"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "状态"
-          }
-        }
-      }
-    },
-    "settings.running": {
-      "comment": "Recovery window: app is running with icon visible",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mac Resource Monitor is running. The process table is in the menu bar."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mac Resource Monitor 正在运行。进程表在菜单栏里。"
+            "value": "Mac Resource Monitor 设置"
           }
         }
       }
@@ -753,6 +717,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "没能改开机打开。"
+          }
+        }
+      }
+    },
+    "settings.quit": {
+      "comment": "Compact Settings identity row action",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出"
           }
         }
       }

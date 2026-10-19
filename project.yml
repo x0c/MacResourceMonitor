@@ -23,8 +23,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: SHZQ3MWP3B
-    CURRENT_PROJECT_VERSION: 42
-    MARKETING_VERSION: 1.1.6
+    CURRENT_PROJECT_VERSION: 43
+    MARKETING_VERSION: 1.1.7
     COMBINE_HIDPI_IMAGES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     SWIFT_STRICT_CONCURRENCY: complete
@@ -90,6 +90,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: top.caozc.MacResourceMonitor.mrm
         GENERATE_INFOPLIST_FILE: YES
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: NO
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
@@ -97,6 +98,7 @@ targets:
         Release:
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: Apple Development
+          ENABLE_HARDENED_RUNTIME: YES
   MacResourceMonitor:
     type: application
     platform: macOS

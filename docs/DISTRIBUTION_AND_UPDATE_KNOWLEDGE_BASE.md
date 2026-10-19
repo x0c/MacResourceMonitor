@@ -67,10 +67,16 @@ flowchart TD
 4. 用户从右键菜单或设置窗口选择“检查更新…”时，入口汇总到 `AppDelegate.checkForUpdates()`，再调用 `AppUpdater.checkForUpdates(_:)`；Sparkle 自行展示检查和安装界面。
 5. 更新安装会话进行中，`AppDelegate` 将 `SPUUpdater.sessionInProgress` 交给 `TerminationGuard`。常规关闭保护继续生效，但更新所需终止必须被放行，否则安装无法完成。
 
+### Publisher safety (2026-10-19)
+
+Clean public snapshots must fetch the GitHub main parent before `commit-tree`; an `ls-remote` hash alone may name an absent local object. Preserve the active repository hook chain for source/tag pushes, source commits and Homebrew commits; never bypass leak-gate with `core.hooksPath=/dev/null`. Build the supported arm64/x86_64 Release slices with `ONLY_ACTIVE_ARCH=NO`, keep complete build/analysis diagnostics and exclude task logs/build outputs from source publication. These are the same publisher assumptions corrected in HandySwitch; existing accepted artifacts may resume at the failed publication step without re-notarization.
+
+Export acceptance also checks every nested executable's hardened runtime and absence of debug entitlements, including `mrm`. Its target-level `ENABLE_HARDENED_RUNTIME=NO` overrides the shared Release value; set the CLI's Release value to `YES` before archive because Xcode export preserves the original runtime flags. The 1.1.7 export initially showed `mrm` with `flags=0x0`; that artifact must be rebuilt, not manually re-signed or submitted. [Apple requires hardened runtime for command line targets](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution). A separate transient `A timestamp was expected but was not found` export failure recovered by exporting the same archive again; secure timestamps remain mandatory, and no network root cause was established.
+
 ### 公开发行链路
 
 1. 在 `Configuration/Base.xcconfig` 和 `project.yml` 同步设置营销版本与内部构建号；脚本先检查两份数值一致且内部构建号为正整数。
-2. `publish-release.sh` 生成 Xcode 工程并执行 Release 构建（应用 target 依赖 `mrm` target，embed 阶段把 CLI 拷进包内 `Contents/MacOS/mrm`），然后以 Developer ID 对 Sparkle 的 XPC 服务、更新器、自动更新程序、框架、内嵌 `mrm` 和应用按由内到外的顺序重新签名；包里没有可执行的 `mrm` 就拒绝发布。Homebrew cask 用 `binary` 把包内 `mrm` 链到 PATH，应用每次启动也把包内 `mrm` 链到 `~/.local/bin/mrm`（只动用户目录）。
+2. `publish-release.sh` 生成 Xcode 工程，执行通用 Release `archive` 与 Developer ID `-exportArchive`，由 Xcode 重签 Sparkle 与内嵌代码，不再手工逐层重签。应用 target 依赖 `mrm` target（`SKIP_INSTALL=YES`），embed 阶段把 CLI 拷进包内 `Contents/MacOS/mrm`；包里没有可执行的 `mrm` 就拒绝发布。Homebrew cask 用 `binary` 把包内 `mrm` 链到 PATH，应用每次启动也把包内 `mrm` 链到 `~/.local/bin/mrm`（只动用户目录）。
 3. 脚本检查签发者、时间戳、加固运行时和调试权限，随后公证应用并装订应用票据。
 4. 脚本打出更新 ZIP，用 Sparkle 工具生成并验证 `appcast.xml`：更新地址指向本次 GitHub Release，版本说明内嵌，清单带 EdDSA 签名。
 5. 脚本从已公证的应用创建 DMG，公证并装订 DMG；本地通过 Gatekeeper 与票据校验后才进入远端步骤。
@@ -119,7 +125,7 @@ flowchart TD
 | 改更新期间的退出策略或检查入口接线 | `MacResourceMonitor/AppDelegate.swift` | `applicationDidFinishLaunching(_:)`、`applicationShouldTerminate(_:)`、`checkForUpdates()` | 将更新会话状态交给终止守卫，并把用户操作转给 `AppUpdater`。 |
 | 改右键入口文字或事件转发 | `MacResourceMonitor/StatusItem/StatusItemController.swift` | `StatusItemController.checkForUpdates(_:)` | 用户可见入口属于菜单栏域；此处只确认它最终转发到更新动作。 |
 | 改设置窗口的检查入口 | `MacResourceMonitor/Views/SettingsView.swift` | 更新按钮动作 | 同样调用 `AppDelegate.checkForUpdates()`。 |
-| 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。含内嵌 `mrm` 的 Developer ID 重签与逐个核验，cask 用 `binary` 链 CLI。 |
+| 改完整发行步骤 | `scripts/publish-release.sh` | `notarize_and_wait()`、`push_github_snapshot()` | 串联签名、公证、Release、cask 和匿名终检；凭据只从未入库的本地环境文件读取。含归档导出和内嵌 `mrm` 的 Developer ID 逐个核验，cask 用 `binary` 链 CLI。 |
 | 改公开更新内容 | `appcast.xml` | Sparkle item 与签名尾部 | 必须由 Sparkle 工具生成和验证，不能手改后直接发布。 |
 | 改用户安装路径或安装说明 | `README.md`、`README.zh-CN.md` | Install / 安装段 | 英文说明为权威安装结构，中文说明保持同等渠道与边界。 |
 | 改 GitHub 默认可发现性 | GitHub About description + Topics (API/settings, not git) and README opening | First sentence of description | Default search scans **name, description, Topics only**. Frozen need queries: `macos cpu menu bar`, `macos kill process menu bar`, `macos menu bar cpu monitor`. Near-miss → rewrite that first sentence (`macOS … in your menu bar`); do not rename; do not treat a miss on `kill process` as total absence (port-killer noise). Honest **macOS 26+**. Pushing README does not update About. |
@@ -152,7 +158,7 @@ flowchart TD
 - 【必须】Xcode 工程只改 `project.yml`，改后 XcodeGen 重生（`MacResourceMonitor.xcodeproj` 是派生产物）。
 - **AI 易错点** 营销版本与内部构建号须同步改 `Configuration/Base.xcconfig` 与 `project.yml`（脚本会拦不一致）。
 - **AI 易错点** 禁止用 Debug / ad-hoc 覆盖 `/Applications` 里的 Developer ID 包；覆盖安装先删再整包 `ditto`（见 swift 基线）。
-- **AI 易错点** 新增的 tool 类型 target 不可沿用空签名标识（Release 报 `An empty code signing identity is not valid`）：`mrm` 在 `project.yml` 用 `Automatic` + `Apple Development` 单独覆盖基座的 Manual + Developer ID；包内产物的 Developer ID 重签由发版脚本执行（原因：基座 Release 签名设置会被 target 继承，与 Automatic 冲突）。
+- **AI 易错点** 新增的 tool 类型 target 不可沿用空签名标识（Release 报 `An empty code signing identity is not valid`）：`mrm` 在 `project.yml` 用 `Automatic` + `Apple Development` 单独覆盖基座的 Manual + Developer ID；包内产物的 Developer ID 签名由归档导出阶段完成并单独核验（原因：基座 Release 签名设置会被 target 继承，与 Automatic 冲突）。
 - **AI 易错点** 应用对 `mrm` 的 target 依赖必须 `embed: false`：默认 xcodegen 会把 tool 产物再拷一份进 `Contents/Resources`（实测 `mrm in Resources`），那份发版脚本不重签、公证打回；拷贝只走 `Embed mrm CLI` 阶段进 `Contents/MacOS`。
 - 【接线】`AppUpdater` 长期持有 Sparkle 控制器；`AppDelegate` 把 `sessionInProgress` 交给 `TerminationGuard`；右键/设置「检查更新…」只转发，不重写安装流程。
 - 【禁止】手改已签名 `appcast.xml`；必须用本仓 `scripts/publish-release.sh` 调用的 Sparkle 工具生成并校验。

@@ -16,12 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var compactPanel: CompactPanel?
     private let appUpdater = SparkleUpdateChecker()
     private let terminationGuard = TerminationGuard()
-    private var commaMonitor: Any?
     /// 后台就绪时刻；菜单栏即主入口的二次启动防呆用。
     private var readyAt = Date()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        #if DEBUG
+        if let index = CommandLine.arguments.firstIndex(of: "--settings-appearance"),
+           CommandLine.arguments.indices.contains(index + 1) {
+            NSApp.appearance = NSAppearance(named: CommandLine.arguments[index + 1] == "dark" ? .darkAqua : .aqua)
+        }
+        #endif
         // CLI 随包走：每次启动把包内 mrm 链到 ~/.local/bin，无需手动安装（只动用户目录，不碰已有实体文件）。
         CLILinkManager.ensureLinked()
         // 图标即主入口：清掉历史显隐偏好，启动强制图标可见。
@@ -65,15 +70,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        commaMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let command = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
-            if command, event.charactersIgnoringModifiers == "," {
-                SettingsWindowController.shared.show()
-                return nil
-            }
-            return event
-        }
-
         // 图标始终可见；登录项拉起时仍传入判定，禁止自动弹设置窗。
         let isLoginLaunch = LoginLaunchDetector.isLaunchedAsLoginItem
         readyAt = Date()
@@ -112,9 +108,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if let commaMonitor {
-            NSEvent.removeMonitor(commaMonitor)
-        }
         networkListModel.stopSamplingNow()
         networkSpeedMonitor.stop()
         NettopStreamSampler.reapOrphanedSamplers()

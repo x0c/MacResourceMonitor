@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mac Resource Monitor macOS 一条命令发版：
-#   Release 构建 -> 重签 Sparkle 内嵌件 -> Developer ID 签名自检 -> 苹果公证 -> 装订票据
+#   Universal archive/export -> Developer ID verification -> notarization -> stapling
 #   -> 生成 Sparkle 签名更新包与 appcast -> 打 dmg -> 公证 dmg -> 装订
 #   -> 提交 / 打 tag / 推送私有 origin
 #   -> 把当前树的干净快照推到 GitHub（不把私有开发史推上去）
@@ -39,7 +39,7 @@ readonly NOTARY_ISSUER="${NOTARY_ISSUER:?缺少公证 Issuer ID（NOTARY_ISSUER)
 readonly SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:?缺少 Sparkle 签名账号（SPARKLE_ACCOUNT）}"
 readonly SIGN_IDENTITY="Developer ID Application"
 readonly BUILD_DIR="${ROOT_DIR}/build"
-readonly APP_PATH="${BUILD_DIR}/DerivedData/Build/Products/Release/${APP_BUNDLE}.app"
+readonly APP_PATH="${BUILD_DIR}/Export/${APP_BUNDLE}.app"
 readonly NOTARY_POLL_INTERVAL=30
 readonly NOTARY_TIMEOUT=3600
 
@@ -116,14 +116,15 @@ push_github_snapshot() {
     || die "缺少 github remote（git remote add github git@github.com:${REPO}.git）"
   git add -A
   tree="$(git write-tree)"
-  parent="$(git ls-remote github refs/heads/main 2>/dev/null | awk '{print $1}')"
+  git fetch github main
+  parent="$(git rev-parse refs/remotes/github/main)"
   if [[ -n "${parent}" ]]; then
     commit="$(git commit-tree "${tree}" -p "${parent}" -m "${message}")"
   else
     commit="$(git commit-tree "${tree}" -m "${message}")"
   fi
-  git -c core.hooksPath=/dev/null push github "${commit}:refs/heads/main"
-  git -c core.hooksPath=/dev/null push github "${commit}:refs/tags/${tag}"
+  git push github "${commit}:refs/heads/main"
+  git push github "${commit}:refs/tags/${tag}"
 }
 
 cd "${ROOT_DIR}"
@@ -177,58 +178,40 @@ fi
 log_step "本次发布版本：${tag}（内部构建号 ${build_number}）"
 
 # ---------- 1. 构建 ----------
-log_step "生成 Xcode 工程并做 Release 构建"
-xcodegen generate >/dev/null
+log_step "生成 Xcode 工程并归档通用 Release"
+xcodegen generate
 xcodebuild -project "${SCHEME}.xcodeproj" -scheme "${SCHEME}" -configuration Release \
-  -destination 'platform=macOS' -derivedDataPath build/DerivedData \
-  -allowProvisioningUpdates build \
-  || die "Release 构建失败"
-[[ -d "${APP_PATH}" ]] || die "构建产物不存在：${APP_PATH}"
+  -destination 'generic/platform=macOS' -derivedDataPath build/DerivedData \
+  -archivePath "${BUILD_DIR}/MacResourceMonitor.xcarchive" \
+  -allowProvisioningUpdates ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO clean archive \
+  || die "Release 归档失败"
+export_options="${BUILD_DIR}/ExportOptions.plist"
+python3 - "${export_options}" <<'EXPORT_PY'
+import plistlib, re, sys
+from pathlib import Path
+team = re.search(r"^DEVELOPMENT_TEAM\s*=\s*(\S+)", Path("Configuration/Base.xcconfig").read_text(), re.M).group(1)
+Path(sys.argv[1]).write_bytes(plistlib.dumps({
+    "method": "developer-id", "teamID": team, "signingStyle": "manual",
+    "signingCertificate": "Developer ID Application",
+}))
+EXPORT_PY
+xcodebuild -exportArchive -archivePath "${BUILD_DIR}/MacResourceMonitor.xcarchive" \
+  -exportPath "${BUILD_DIR}/Export" -exportOptionsPlist "${export_options}" \
+  -allowProvisioningUpdates || die "Developer ID 导出失败"
+[[ -d "${APP_PATH}" ]] || die "导出产物不存在：${APP_PATH}"
+[[ -x "${APP_PATH}/Contents/MacOS/mrm" ]] || die "导出产物缺少 mrm"
 [[ -x "${sparkle_bin_dir}/generate_appcast" ]] || die "找不到 Sparkle 的 generate_appcast 工具"
 [[ -x "${sparkle_bin_dir}/sign_update" ]] || die "找不到 Sparkle 的 sign_update 工具"
-
-# ---------- 1.5 重签 Sparkle 内嵌可执行文件 ----------
-# xcodebuild 只重签 Sparkle.framework 本体，framework 内部的 Updater.app / Autoupdate /
-# 两个 XPC 服务仍保留 SPM 包自带的 ad-hoc 签名，苹果公证会逐个检查并打回。
-# 必须按「最内层先签」的顺序用 Developer ID 重签，最后重签外层 App。
-log_step "重签 Sparkle 内嵌可执行文件（Updater / Autoupdate / XPC 服务）"
 sparkle_fw_dir="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B"
-codesign --force --options runtime --timestamp \
-  --entitlements "${BUILD_DIR}/DerivedData/SourcePackages/checkouts/Sparkle/Downloader/Downloader.entitlements" \
-  --sign "${SIGN_IDENTITY}" "${sparkle_fw_dir}/XPCServices/Downloader.xpc" \
-  || die "重签 Sparkle Downloader.xpc 失败"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${sparkle_fw_dir}/XPCServices/Installer.xpc" \
-  || die "重签 Sparkle Installer.xpc 失败"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${sparkle_fw_dir}/Updater.app" \
-  || die "重签 Sparkle Updater.app 失败"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${sparkle_fw_dir}/Autoupdate" \
-  || die "重签 Sparkle Autoupdate 失败"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${APP_PATH}/Contents/Frameworks/Sparkle.framework" \
-  || die "重签 Sparkle.framework 失败"
-# 包内自带的 mrm 命令行：embed 阶段已拷入，必须同顺序重签，否则公证按未签名打回。
-[[ -x "${APP_PATH}/Contents/MacOS/mrm" ]] \
-  || die "包里没有 mrm（检查 Embed mrm CLI 阶段），拒绝发布缺 CLI 的版本"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${APP_PATH}/Contents/MacOS/mrm" \
-  || die "重签内嵌 mrm 失败"
-codesign --force --options runtime --timestamp \
-  --sign "${SIGN_IDENTITY}" "${APP_PATH}" \
-  || die "重签 ${APP_BUNDLE}.app 失败"
-sparkle_public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' MacResourceMonitor/Info.plist 2>/dev/null || true)"
-[[ -n "${sparkle_public_key}" ]] || die "Info.plist 缺少 Sparkle 更新公钥"
-[[ "$("${sparkle_bin_dir}/generate_keys" --account "${SPARKLE_ACCOUNT}" -p 2>/dev/null)" == "${sparkle_public_key}" ]] \
-  || die "钥匙串里的 Sparkle 更新签名密钥缺失或与应用公钥不匹配"
 
-# ---------- 2. 签名自检 ----------
+# ---------- 2. Verify every exported executable ----------
 log_step "校验签名、加固运行时与权限清单"
+codesign --verify --deep --strict "${APP_PATH}" || die "导出签名结构无效"
 sign_info="$(codesign -dv --verbose=2 "${APP_PATH}" 2>&1)"
 entitlements="$(codesign -d --entitlements - "${APP_PATH}" 2>/dev/null || true)"
 grep -q "Authority=${SIGN_IDENTITY}" <<<"${sign_info}" \
   || die "产物不是 Developer ID 签名，检查 project.yml 的 Release 配置"
+grep -q "Timestamp=" <<<"${sign_info}" || die "应用缺安全时间戳"
 grep -q "flags=.*runtime" <<<"${sign_info}" \
   || die "产物没开加固运行时，苹果公证会打回"
 if grep -q "get-task-allow" <<<"${entitlements}"; then
@@ -245,6 +228,12 @@ for nested in "${sparkle_fw_dir}/XPCServices/Downloader.xpc" \
     || die "嵌套组件不是 Developer ID 签名：${nested}"
   grep -q "Timestamp=" <<<"${nested_info}" \
     || die "嵌套组件缺安全时间戳：${nested}"
+  grep -q "flags=.*runtime" <<<"${nested_info}" \
+    || die "嵌套组件未启用加固运行时：${nested}"
+  nested_entitlements="$(codesign -d --entitlements - "${nested}" 2>/dev/null || true)"
+  if grep -q "get-task-allow" <<<"${nested_entitlements}"; then
+    die "嵌套组件带调试权限：${nested}"
+  fi
 done
 
 # ---------- 3. 公证应用本体 ----------
@@ -262,13 +251,16 @@ release_notes_file="${work_dir}/release-notes.md"
 cat > "${release_notes_file}" <<EOF
 Mac Resource Monitor ${version}
 
-- Apple apps you use, such as Safari, Notes, Mail and TextEdit, can now be ended like any other app. System services stay locked. Finder can be ended on its own row (macOS reopens it) but is skipped by "end all" and \`mrm doom\`.
-- New \`mrm\` command line, bundled with the app: \`mrm ps\`, \`mrm status\`, and \`mrm doom\` to end everything closable in one go.
-- Fixed leftover network samplers that could keep a CPU core busy after the network list closed.
+## English
+- Refresh Settings with native aligned switches and a compact app identity, update and quit row. All settings fit without scrolling.
+- Add the existing Show Network Speed preference to Settings, keeping it synchronized with the menu.
+- Keep quiet startup and the existing login approval, window restoration and close-without-quitting behavior.
 
-- 现在可以像其他 App 一样结束 Safari、备忘录、邮件、文本编辑等苹果自带 App；系统服务仍然锁定。访达可以单行结束（系统会自动重开），但「全部结束」和 \`mrm doom\` 会跳过它。
-- 新增随应用自带的 \`mrm\` 命令行：\`mrm ps\`、\`mrm status\`，以及一键结束所有可结束项的 \`mrm doom\`。
-- 修复网络表关闭后，残留的网速采样仍可能占满一个 CPU 核心的问题。
+## 简体中文
+- 优化设置窗口，采用对齐的原生开关，并将应用信息、检查更新和退出整理到同一行；全部设置完整可见，无需滚动。
+- 将已有的「显示网速」开关加入设置，与菜单保持同步。
+- 保留静默启动、开机自启待批准提示、窗口位置记忆和关窗不退出的行为。
+
 EOF
 
 appcast_dir="${work_dir}/appcast"
@@ -334,7 +326,7 @@ ditto "${appcast_dir}/appcast.xml" appcast.xml
 log_step "提交改动并打 tag"
 git add -A
 if ! git diff --cached --quiet; then
-  git -c core.hooksPath=/dev/null commit -m "chore: 发布 ${tag}"
+  git commit -m "chore: 发布 ${tag}"
 else
   echo "工作区无改动，跳过提交"
 fi
@@ -421,17 +413,21 @@ git -C "${tap_dir}" add "Casks/${CASK_NAME}.rb"
 if git -C "${tap_dir}" diff --cached --quiet; then
   echo "Homebrew 配方已是 ${version}，无需更新"
 else
-  git -C "${tap_dir}" -c core.hooksPath=/dev/null commit -m "mac-resource-monitor ${version}"
+  git -C "${tap_dir}" commit -m "mac-resource-monitor ${version}"
   git -C "${tap_dir}" push origin HEAD
 fi
 
 # ---------- 9. 匿名终检 ----------
 log_step "匿名下载与更新清单终检"
-curl -fsSL "${FEED_URL}" -o "${work_dir}/published-appcast.xml" \
-  || die "公开 appcast 无法匿名下载"
+# raw.githubusercontent.com 缓存约 5 分钟：刚推送时读到旧清单不算失败，限时重查。
+feed_waited=0
+until curl -fsSL "${FEED_URL}" -o "${work_dir}/published-appcast.xml" \
+  && grep -q "<sparkle:version>${build_number}</sparkle:version>" "${work_dir}/published-appcast.xml"; do
+  (( feed_waited >= 600 )) && die "线上 appcast 等了 ${feed_waited} 秒仍没有当前内部构建号 ${build_number}"
+  sleep 20
+  feed_waited=$(( feed_waited + 20 ))
+done
 xmllint --noout "${work_dir}/published-appcast.xml" || die "线上 appcast 不是合法 XML"
-grep -q "<sparkle:version>${build_number}</sparkle:version>" "${work_dir}/published-appcast.xml" \
-  || die "线上 appcast 没有当前内部构建号 ${build_number}"
 "${sparkle_bin_dir}/sign_update" --account "${SPARKLE_ACCOUNT}" --verify "${work_dir}/published-appcast.xml" >/dev/null \
   || die "线上 appcast 完整性校验失败：公开更新清单未签名或传输后被改写"
 curl -fsSL --range 0-0 "${REPO_WEB}/releases/download/${tag}/${ASSET_STEM}-${version}.zip" -o /dev/null \

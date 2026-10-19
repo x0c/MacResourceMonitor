@@ -108,15 +108,12 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 
 ## 构建与覆盖安装
 
+Development build commands are below. Official overwrite installation uses the committed universal Developer ID export from `scripts/publish-release.sh`: `build/Export/Mac Resource Monitor.app`. Do not install the ordinary build product with unexported nested helpers. Complete the signing, publication and installed behavior checks in [the operations guide](docs/OPERATIONS_GUIDE.md) and [distribution knowledge base](docs/DISTRIBUTION_AND_UPDATE_KNOWLEDGE_BASE.md).
+
 ```bash
 xcodegen generate
 xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -configuration Release \
   -derivedDataPath build/DerivedData -destination 'platform=macOS' build
-rm -rf "/Applications/Mac Resource Monitor.app"
-ditto "build/DerivedData/Build/Products/Release/Mac Resource Monitor.app" "/Applications/Mac Resource Monitor.app"
-xattr -dr com.apple.quarantine "/Applications/Mac Resource Monitor.app" 2>/dev/null || true
-open "/Applications/Mac Resource Monitor.app"
-sleep 1; ~/.local/bin/mrm version # 应用启动时已把包内 mrm 链到 ~/.local/bin
 ```
 
 要管理员密码：免密失败立刻停。对外发版：`scripts/publish-release.sh`（发版前 `leakgate.py scan --profile public`）。首次安装：GitHub Release 公证 dmg 或 `brew tap x0c/tap && brew install --cask mac-resource-monitor`；更新源 `appcast.xml`。
