@@ -98,6 +98,16 @@ doom only ends your own non-system rows and always keeps mrm itself, your termin
 
 A Stats/iStat sensor dashboard, a dock icon, a desktop process table, an expandable process tree, Mac App Store, sandboxing, Accessibility / Full Disk Access, or Windows/Linux clients. A small recovery window after hiding the menu bar icon is required and is not a process table.
 
+## Related Tools
+
+| Tool | Description |
+|---|---|
+| [NeatWebApp](https://github.com/NeatMacApps/NeatWebApp) | Focused website apps with a notch launcher and edge-tucking activity Dock. |
+| [NeatPaste](https://github.com/NeatMacApps/NeatPaste) | Local clipboard history in the menu bar. |
+| [NeatEditor](https://github.com/NeatMacApps/NeatEditor) | A fast, distraction-free native text editor. |
+| [HandySwitch](https://github.com/x0c/HandySwitch) | Everyday menu-bar toggles. |
+| [Corral](https://github.com/corral-dev/corral-apple) | Native Mac and iPhone clients for coding-agent sessions. |
+
 ## License
 
 [MIT](LICENSE)
