@@ -97,6 +97,16 @@ doom 只动当前用户、非系统保护的行，且永远跳过 mrm 自身、�
 
 Stats / iStat 那种只看传感器的菜单栏、程序坞图标、桌面进程表工作区、可展开进程树、Mac App Store、沙盒、辅助功能 / 完整磁盘访问、Windows / Linux 客户端。菜单栏图标不可隐藏；登录自启时静默，不弹设置窗。
 
+## 关联工具
+
+| 工具 | 简介 |
+|---|---|
+| [NeatWebApp](https://github.com/NeatMacApps/NeatWebApp) | 从刘海启动网站应用，用悬浮活动 Dock 收起窗口。 |
+| [NeatPaste](https://github.com/NeatMacApps/NeatPaste) | 菜单栏中的本地剪贴板历史。 |
+| [NeatEditor](https://github.com/NeatMacApps/NeatEditor) | 启动迅速、专注写作的原生文本编辑器。 |
+| [HandySwitch](https://github.com/x0c/HandySwitch) | 常用菜单栏开关。 |
+| [Corral](https://github.com/corral-dev/corral-apple) | 在原生 Mac 与 iPhone 客户端继续编程 Agent 会话。 |
+
 ## 许可证
 
 [MIT](LICENSE)
