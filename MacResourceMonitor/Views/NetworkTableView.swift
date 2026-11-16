@@ -3,6 +3,7 @@ import SwiftUI
 
 struct NetworkTableView: View {
     @Bindable var model: NetworkListModel
+    @Bindable private var whitelist = WhitelistStore.shared
 
     var body: some View {
         VStack(spacing: 0) {

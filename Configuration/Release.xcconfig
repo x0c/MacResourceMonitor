@@ -1,1 +1,2 @@
 #include "Base.xcconfig"
+COMPILER_INDEX_STORE_ENABLE = NO

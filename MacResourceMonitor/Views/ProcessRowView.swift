@@ -5,6 +5,7 @@ struct ProcessRowView: View {
     let row: ProcessRow
     let onEnd: () -> Void
     let onEndHover: (Bool) -> Void
+    @Bindable private var whitelist = WhitelistStore.shared
 
     var body: some View {
         MonitorTableRowChrome(
@@ -15,8 +16,10 @@ struct ProcessRowView: View {
             canEnd: row.canEnd,
             isSystemProtected: row.isSystemProtected,
             isCurrentUser: row.isCurrentUser,
+            isWhitelisted: whitelist.isWhitelisted(row),
             onEnd: onEnd,
             onEndHover: onEndHover,
+            onToggleWhitelist: { whitelist.toggle(row) },
             accessibilityText: accessibilityText
         ) {
             Text(ProcessTableRanking.percentText(row.cpuPercent))

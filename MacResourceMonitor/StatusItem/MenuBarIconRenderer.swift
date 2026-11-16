@@ -25,6 +25,48 @@ enum NetworkSpeedEmphasis: Equatable {
 
 @MainActor
 enum MenuBarIconRenderer {
+    struct RingRenderKey: Equatable {
+        let cpuStep: Int
+        let memoryStep: Int
+        let scaleBucket: Int
+
+        init(cpuPercent: Double, memoryPercent: Double, scale: CGFloat) {
+            self.cpuStep = Self.quantizeRingPercent(cpuPercent)
+            self.memoryStep = Self.quantizeRingPercent(memoryPercent)
+            self.scaleBucket = Int((max(scale, 1) * 100).rounded())
+        }
+
+        private static func quantizeRingPercent(_ value: Double) -> Int {
+            let clamped = min(max(value, 0), 100)
+            guard clamped > 0 else { return 0 }
+            if clamped >= 100 { return 200 }
+            // Preserve non-zero visibility strictly while coalescing sub-pixel jitter (0.5% steps).
+            return max(1, min(199, Int((clamped * 2).rounded())))
+        }
+    }
+
+    struct NetworkRenderKey: Equatable {
+        let reading: NetworkRatePair
+        let emphasis: NetworkSpeedEmphasis
+        let scaleBucket: Int
+
+        init(
+            uploadBytesPerSecond: Double?,
+            downloadBytesPerSecond: Double?,
+            scale: CGFloat
+        ) {
+            self.reading = NetworkRateFormatter.pair(
+                uploadBytesPerSecond: uploadBytesPerSecond,
+                downloadBytesPerSecond: downloadBytesPerSecond
+            )
+            self.emphasis = NetworkSpeedEmphasis.resolve(
+                uploadBytesPerSecond: uploadBytesPerSecond,
+                downloadBytesPerSecond: downloadBytesPerSecond
+            )
+            self.scaleBucket = Int((max(scale, 1) * 100).rounded())
+        }
+    }
+
     static let pointSize: CGFloat = 19
 
     private static let ringWidth: CGFloat = 2
@@ -72,13 +114,26 @@ enum MenuBarIconRenderer {
         }
     }
 
+    static var currentBackingScaleFactor: CGFloat {
+        max(NSScreen.main?.backingScaleFactor ?? 2, 1)
+    }
+
     static func networkImage(
         uploadBytesPerSecond: Double?,
         downloadBytesPerSecond: Double?
     ) -> NSImage {
-        let networkLayout = makeNetworkLayout(
+        let key = NetworkRenderKey(
             uploadBytesPerSecond: uploadBytesPerSecond,
-            downloadBytesPerSecond: downloadBytesPerSecond
+            downloadBytesPerSecond: downloadBytesPerSecond,
+            scale: currentBackingScaleFactor
+        )
+        return networkImage(for: key)
+    }
+
+    static func networkImage(for key: NetworkRenderKey) -> NSImage {
+        let networkLayout = makeNetworkLayout(
+            reading: key.reading,
+            emphasis: key.emphasis
         )
         return makeTemplateImage(size: NSSize(width: networkWidth, height: menuBarHeight)) { context, _ in
             drawNetworkSpeed(
@@ -97,7 +152,7 @@ enum MenuBarIconRenderer {
         size: NSSize,
         draw: (CGContext, NSRect) -> Void
     ) -> NSImage {
-        let scale = max(NSScreen.main?.backingScaleFactor ?? 2, 1)
+        let scale = currentBackingScaleFactor
         let pixelsWide = max(1, Int((size.width * scale).rounded(.up)))
         let pixelsHigh = max(1, Int((size.height * scale).rounded(.up)))
         guard let rep = NSBitmapImageRep(
@@ -140,17 +195,9 @@ enum MenuBarIconRenderer {
     }
 
     private static func makeNetworkLayout(
-        uploadBytesPerSecond: Double?,
-        downloadBytesPerSecond: Double?
+        reading: NetworkRatePair,
+        emphasis: NetworkSpeedEmphasis
     ) -> NetworkLayout {
-        let reading = NetworkRateFormatter.pair(
-            uploadBytesPerSecond: uploadBytesPerSecond,
-            downloadBytesPerSecond: downloadBytesPerSecond
-        )
-        let emphasis = NetworkSpeedEmphasis.resolve(
-            uploadBytesPerSecond: uploadBytesPerSecond,
-            downloadBytesPerSecond: downloadBytesPerSecond
-        )
         let topLine = makeTextLine(
             rate: reading.upload,
             unit: reading.unit ?? "",

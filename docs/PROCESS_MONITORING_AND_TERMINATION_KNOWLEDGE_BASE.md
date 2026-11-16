@@ -1,9 +1,122 @@
 # 实时占用与结束领域知识库
 
+## Whole-machine CPU and cross-UID visibility (2026-11-16)
+
+Symptom: fans spun up while the panel header stayed low and the list showed no
+culprit. The header summed rows that survived two samples, so `kernel_task` (PID 0,
+dropped by `guard pid > 0`), every process owned by another UID
+(`PROC_PIDTASKINFO` returns `EPERM` for non-owned UIDs unless root) and any process
+shorter than one refresh interval never reached the total. On this Mac the gap was
+measured at 82.4% host CPU against a 36.1% row sum.
+
+Facts verified on this machine (installed 1.1.7 tree, macOS 26):
+
+| Fact | Evidence |
+|---|---|
+| `/bin/ps` is setuid root (`-rwsr-xr-x`), so cumulative `TIME` is readable for every UID | `ls -l /bin/ps`; `ps -p 432 -o time` returns WindowServer's CPU seconds |
+| `proc_pidinfo(PID, PROC_PIDTASKINFO)` returns 0 with `EPERM` for other UIDs, and fails for PID 0 | non-root probe on PID 432 and PID 0 |
+| `kp_proc.p_pctcpu` in `KERN_PROC_ALL` is always 0 on this kernel; `ps %CPU` is not derived from it | probe summed 0.0% while `host_statistics` reported 34.3% busy |
+| `host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO)` returns machine-wide ticks; the busy-delta ratio is the 0–100% machine load | probe |
+| `KERN_PROC_ALL` does include PID 0, but it has no readable path or task info | probe |
+| `proc_pidinfo(PID, PROC_PIDVNODEPATHINFO)` returns the cwd of same-UID processes without privileges | `pi 89641` -> `Codes/Subswap` |
+
+Implemented shape:
+
+1. `SystemCPULoad` reads `HOST_CPU_LOAD_INFO` (split into `userTicks` and
+`systemTicks`); `ProcessSampler` keeps a short rolling history (up to 3 samples,
+~2–3 s) for `snapshot.totalCPUPercent` and the menu-bar outer ring so single-second
+scheduler spikes do not jump straight to `100%`, while keeping the immediate 1-step
+interval delta for `kernel_task` bounding. A hidden pass can no longer under-report
+the machine.
+2. `ForeignProcessCPU` runs `/bin/ps -Axo pid=,uid=,time=` **only** for detailed
+passes (a table is open), using monotonic `systemUptime` midpoint timestamps.
+`ProcessSampler` reads `hostLoad` and same-UID `PROC_PIDTASKINFO` (`user` and
+`system` ticks) in one tight synchronous pass *after* `ForeignProcessCPU.read()`
+returns so cross-window skew does not inflate the remainder. Nothing runs while
+both tables are closed.
+3. `kernel_task` is a synthetic `RawProcess` with PID 0 whose CPU is bounded by both
+the 1-step total gap and the system-space gap:
+`min(instantTotal - attributedTotal, max(0, instantSystem - ownedSystem))`, emitted
+only when a previous foreign baseline existed and the estimate is at least 0.5%.
+This stops exited user-space builds (`swift-frontend`, `node`) from being reported
+as `kernel_task`. PID 0 stays protected (`isProtected(pid <= 1)`), so the row can
+never be signalled.
+4. `DisplayClassifier.isCorral` used to match any path or argument containing
+"corral", which swallowed `Corral.app`, every TUI, `corral remote _serve`, the
+`tmux -D -L corral-keepalive` keep-alive server and unrelated probe binaries.
+Corral now matches the `corral` binary (including `python -m corral`); the app
+bundle keeps its own desktop row, each TUI and remote server is its own row, and
+internal `corral.*` worker modules fold into the row that spawned them.
+5. `pi` and `Cursor Agent` rows carry the cwd label (`pi (Subswap)`, or
+`pi (Corral/cli)` when the leaf is a generic folder name such as `cli`/`src`),
+resolved from the session-owner member in `members` (never solely `lead`, which
+shifts to a folded child like `tsc` when busy). `.desktopApp` rows likewise fall
+back to `id`'s bundle path if a nested CLI binary (`mrm`) becomes `lead`. Children of
+an agent fold into that agent's row; the walk stops at terminals, `tmux`,
+`Cursor.app`, Corral and desktop apps.
+6. Detailed passes while a table is open use a 1.0 s cadence; the hidden cadence
+stays 1.5 s and still spawns no subprocess.
+
+Rules that must survive maintenance:
+
+- Never derive the header or the ring from row sums; never clamp a row sum to 100%
+and present it as the machine.
+- Never run `ps` (or any other subprocess) while both tables are closed.
+- Never fold children into terminals, `tmux`, Corral or desktop apps, and never let
+`kernel_task` become endable, bulk-endable or whitelist-exempt.
+
+## Hidden-panel CPU work (2026-11-12, updated 2026-11-15)
+
+Keep the existing process CPU delta, identity checks and refresh cadence. When
+both tables are closed, collect CPU counters without process arguments,
+responsibility, physical-footprint queries or application classification. Retain
+the last detailed rows for immediate reopening; collect fresh details while
+either table is open and during bounded startup network warmup. The network
+table is also a consumer of process identities, even when the CPU table is closed.
+Do not replace hidden rows with incomplete records or weaken termination checks.
+
+Live profiling of installed 1.1.7 (build 43, PID 785) on 2026-11-15 measured
+chronic 6.35% single-core CPU usage while both panels remained closed (`108.35s`
+CPU across `1705s` wall time, matching an external agent audit reporting ~6.2%):
+1. Per-PID syscalls in `ProcessSampler.snapshot`: walking ~760 PIDs every 1.5s
+   with separate `proc_pidpath`, `sysctl(KERN_PROC_PID)` and `proc_pidinfo`
+   calls (~2,280 syscalls/pass). Replace per-PID BSD queries with a single bulk
+   `sysctl([CTL_KERN, KERN_PROC, KERN_PROC_ALL])` table read; skip
+   `PROC_PIDTASKINFO` and `RUSAGE_INFO_V4` on cross-UID processes when
+   `currentUID != 0` (XNU returns `EPERM` for all non-owned UIDs, verified
+   `other_ok = 0`); skip `proc_pidpath` completely when `collectDetails == false`
+   and cache resolved paths by `ProcessIdentity` once process age exceeds 2s so
+   `fork()+execve()` transitions still resolve fresh paths while `ProcessTerminator`
+   re-verifies live path and start time before `SIGKILL`.
+2. Hidden SwiftUI `NSHostingView` invalidation: mutating `@Observable`
+   `systemCPUPercent` and `systemMemoryPercent` on `ProcessListModel` while
+   `panelVisible == false` triggered `NSHostingView.beginTransaction()`,
+   `ProcessTableRanking.visibleRows` sorting and `LazyVStack` layout every 1.5s
+   on the ordered-out panel. Store latest background totals in
+   `@ObservationIgnored` backing fields for `metricsObserver`, and synchronize
+   observable header fields and `rows` only when `panelVisible` is true.
+3. Detail-refresh collision on panel open: if a user opens either panel while a
+   hidden `collectDetails == false` pass holds `isRefreshing`, `ensureDetailedRows()`
+   awaits completion of the in-flight pass (~0.8ms) and immediately runs a
+   detailed pass instead of dropping the refresh until the next 1.5s sleep.
+
+Network first-frame waits must return on cancellation. The reusable failure
+mechanism is documented in the [async-state guide](~/.config/agentsync/docs/MACOS_ASYNC_UI_STATE_GUIDE.md#cancellation-while-waiting-for-a-first-sample-2026-11-12);
+here it affects closing the network panel before its first delta frame.
+
+`RawProcess.executableName` and `DisplayClassifier` supply the known executable
+or bundle path type when constructing URLs. The installed sample showed the old
+initializers calling `lstat`; the reusable API mechanism is owned by the
+[shared performance guide](~/.config/agentsync/docs/MAC_PERFORMANCE_GOVERNANCE_GUIDE.md#avoiding-filesystem-probes-in-path-handling-2026-11-12).
+Existing naming, classification and termination rules still apply. Installed
+hashes, captures and measurements are in [the operations guide](OPERATIONS_GUIDE.md#local-cpu-optimization-acceptance-2026-11-12).
+
 ## §0 目录索引
 
 | § | 标题 | 定位 |
 |---|---|---|
+| — | [Whole-machine CPU and cross-UID visibility](#whole-machine-cpu-and-cross-uid-visibility-2026-11-16) | Header/ring source, cross-UID sampling, `kernel_task` remainder, Corral and `pi` naming |
+| — | [Hidden-panel CPU work](#hidden-panel-cpu-work-2026-11-12-updated-2026-11-15) | Detail demand, bulk `KERN_PROC_ALL`, hidden `@Observable` gating and installed evidence |
 | §1 | 业务背景与核心概念 | 首次接触实时占用与结束时读 |
 | §1.5 | 架构概览 | 快速建立采样、归类、呈现与结束的调用认知 |
 | §2 | 核心业务流程 | 理解采样、冻结、排序、钉行与结束的完整链路 |
@@ -46,11 +159,12 @@
 graph TD
     A[ProcessTableView / ProcessRowView] --> B[ProcessListModel]
     B --> C[ProcessSampler.snapshot]
-    C --> D[系统 PID、路径、任务时间与物理占用]
-    C --> E[ArgumentCache]
-    C --> F[Responsibility.pidResponsible]
+    C --> D[PID, identity, path and CPU counters]
+    C -->|collectDetails| E[ArgumentCache and physical footprint]
+    C -->|collectDetails| F[Responsibility.pidResponsible]
     C --> G[CPUTime.percent]
-    B --> H[DisplayClassifier.rows]
+    N[NetworkListModel sampling demand] --> B
+    B -->|collectDetails| H[DisplayClassifier.rows]
     H --> I[RawProcess 聚合为 ProcessRow]
     B --> J[ProcessTableRanking.visibleRows]
     J --> A
@@ -73,8 +187,8 @@ sequenceDiagram
 
     U->>V: 打开面板或等待刷新
     V->>M: setPanelVisible(true) / 读取 visibleRows
-    M->>S: snapshot() 与系统内存读取
-    S-->>M: RawProcess 列表、CPU 样本是否就绪
+    M->>S: snapshot(collectDetails: true) and system memory
+    S-->>M: RawProcess records, CPU readiness and totalCPUPercent
     M->>C: rows(原始记录、当前用户、物理内存)
     C-->>M: ProcessRow 平表
     M-->>V: 可见行与表头汇总
@@ -93,9 +207,9 @@ sequenceDiagram
 1. `ProcessListModel` 初始化时读取冻结开关的本地偏好并启动循环。循环会先进行两次短间隔刷新，之后按项目设定的刷新间隔继续刷新。
 2. 面板可见状态由 `ProcessListModel.setPanelVisible()` 接收。变为可见时会立刻请求一次刷新；变为不可见时会清除钉位。
 3. `ProcessListModel.refresh()` 用 `isRefreshing` 防止同一时刻并行进入两次刷新。
-4. `ProcessSampler.snapshot()` 枚举 PID，并为每个能读取路径的有效 PID 采集原始记录；无法获得路径、PID 非正数或系统调用失败的记录会被跳过。
-5. 采样器读取进程启动时刻、父 PID、所属用户、可执行路径、首次缓存的参数、责任 PID、累计 CPU 时间和物理占用。
-6. `DisplayClassifier.rows()` 根据责任对象聚合原始记录，并产出默认按 CPU 降序的展示行。
+4. `ProcessSampler.snapshot(collectDetails:)` enumerates readable processes and updates PID/start-time CPU baselines on every pass. It returns `cpuSampleReady` and `totalCPUPercent` even when detailed records are not requested.
+5. Detail demand is true while the CPU table is visible, while `NetworkListModel` requires identity rows for startup warmup or its open table, or while `latestRows` is still empty. `setNetworkSamplingRequired()` receives the network consumer's lifecycle demand.
+6. A detailed pass additionally reads cached arguments, responsibility and physical footprint, then calls `DisplayClassifier.rows()` and replaces `latestRows`. A metrics-only pass returns no partial `RawProcess` records and retains the last complete rows. The menu bar consumes `snapshot.totalCPUPercent` independently of those retained rows.
 7. 只有在面板可见时才把新采样写入可见 `rows`。未冻结时整表替换；冻结时按原顺序留下仍存活的行并用最新占用数字更新，不插入新行。名单尚空时即使冻结也会先采一拍。
 8. 如果钉住的行已经不在新名单中，`refresh()` 会立即清除钉位，不留下不可见的幽灵行。
 9. CPU 与系统内存汇总无论名单是否冻结都继续更新，并通过已注册的指标观察者通知菜单栏消费者。
@@ -107,6 +221,8 @@ sequenceDiagram
 首次看见进程、进程刚重启、墙钟差非正或读不到累计时间时，没有有效前后样本，行 CPU 为 0 且该 PID 不宣告 CPU 样本就绪。`ProcessListModel` 仅在 `snapshot.cpuSampleReady` 为真时更新系统 CPU 汇总；这避免刚采样或瞬时采样失败把菜单栏环错误刷成空。真实的 0% 与“没有有效前后样本”不是同一件事。
 
 在 Apple Silicon 上，累计进程时间以 mach ticks 给出。`CPUTime.nanosecondsPerMachTick` 正常读取系统 timebase；Rosetta 检测到翻译进程或 timebase 分母不可用时使用既定回退比例，随后才换算 CPU 时间。
+
+表头与菜单栏外环的系统 CPU 不走这条逐进程加总：`ProcessSampler` 用 `SystemCPULoad` 读 `HOST_CPU_LOAD_INFO` 的最近 3 拍（约 2–3 秒）滑动窗口拍数差得到 0–100% 整机占比，`snapshot.totalCPUPercent` 直接采用它。跨用户进程（`WindowServer`、root 守护等）无法用 `PROC_PIDTASKINFO` 读取，只在表打开期间通过 `ForeignProcessCPU`（`/bin/ps`）对累计 CPU 秒在单调时钟 `systemUptime` 中点上做差分；`kernel_task`（PID 0）由单拍系统余量推断并以系统态余量封顶（`min(instantTotal - attributedTotal, max(0, instantSystem - ownedSystem))`），避免已退出或首帧未出数的用户态构建虚抬内核占比。三者都是机器口径，但分开计算，不要求逐拍相加为 100%。跨产品 macOS 采样机理见 [macOS 进程身份知识库](~/.config/agentsync/docs/MAC_PROCESS_IDENTITY_KNOWLEDGE_BASE.md#implementation-notes)。
 
 ### 2.3 物理内存口径
 
@@ -122,13 +238,15 @@ sequenceDiagram
 
 - ChatGPT 桌面应用、电脑操控辅助进程和其 memory helper 归为一行 ChatGPT；memory helper 不单独占一行。
 - 每个符合 tmux 祖先条件的 Cursor 命令行助手各自独立成行，不与 Cursor.app 混为一行。
-- pi 与 Corral 保留人话名，不显示为 node 或 Python。
+- pi 与 Corral 保留人话名，不显示为 node 或 Python；`pi (工作区)`、`Corral TUI`、`Corral Remote` 各自成行，`Corral.app` 仍是桌面应用行。
+- `pi` / `Cursor Agent` 拉起的构建与单测子进程折进该助手行并加总 CPU；终端、`tmux`、Corral、`Cursor.app` 与桌面 App 的子进程不折。
+- `kernel_task` 是采样器生成的只读系统行（PID 0、系统保护），不可结束、不进批量候选。
 - 从 Cursor.app 启动的独立具名工具保持独立，不错误折进 Cursor。
 - 本应用为网络表拉起的按进程网速采样折进 Mac Resource Monitor，禁止把启动参数里的 `0` 显示成人话名。
 - 桌面应用优先按拥有的 `.app` 包聚合；解释器包不会充当拥有者。
 - 无法判为上述对象时，具名工具与普通进程各按自己的 PID 成行。
 
-归类时选 CPU 最高的成员作为该行引导记录，用于种类、展示名和图标路径。行 CPU 是成员 CPU 的总和且不超过 100%，行内存是成员物理占用的总和。表永远是平表；聚合关系不向用户展开成树。
+归类时选 CPU 最高的成员作为该行引导记录，用于种类与图标路径；但 `pi` / `Cursor Agent` 的工作区标签优先取宿主成员的 `workingDirectory`（避免折叠子进程成为引导记录时丢失工作区），通用子目录（`cli`/`src` 等）保留 `父/子`；`.desktopApp` 行若由嵌套 CLI 充当引导记录，则回退到 `id` 中的 `.app` 包路径取展示名。行 CPU 是成员 CPU 的总和且不超过 100%，行内存是成员物理占用的总和。表永远是平表；聚合关系不向用户展开成树。
 
 ### 2.5 可见行、排序、冻结与钉位
 
@@ -162,10 +280,10 @@ sequenceDiagram
 
 | 目录（相对 app-macos 项目根） | 内容 | 关键类/文件数 |
 |---|---|---|
-| `MacResourceMonitor/Services/` | PID 采样、CPU 与内存口径、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`、`TransientStatusMessage` |
+| `MacResourceMonitor/Services/` | PID 采样、整机/跨用户/行级 CPU 与内存口径、工作区 cwd、参数缓存、责任 PID、归类、主状态与结束 | `ProcessSampler`、`SystemCPULoad`、`ForeignProcessCPU`、`ProcessWorkingDirectory`、`CPUTime`、`ArgumentCache`、`Responsibility`、`DisplayClassifier`、`ProcessListModel`、`ProcessTerminator`、`TransientStatusMessage` |
 | `MacResourceMonitor/Models/` | 原始记录、展示行、行种类和排序列内存模型 | `ProcessRow.swift`，1 个文件 |
 | `MacResourceMonitor/Views/` | 进程表表头、排序触发、行呈现、单项/批量结束触发、确认、行右键、悬停钉位入口和结束失败提示 | `ProcessTableView.swift`、`ProcessRowView.swift`、`NetworkRowView.swift`、`MonitorTableRowChrome.swift`、`BulkEndButton.swift`、`EndFailureBanner.swift` |
-| `MacResourceMonitorTests/` | 排名、钉位、归类、系统保护、CPU 上限和失败提示自动消失 | `ProcessTableRankingTests.swift`、`DisplayClassifierTests.swift`、`TransientStatusMessageTests.swift` |
+| `MacResourceMonitorTests/` | 排名、钉位、整机与跨用户 CPU、归类、系统保护、CPU 上限和失败提示自动消失 | `ProcessTableRankingTests.swift`、`CPUSampleTests.swift`、`DisplayClassifierTests.swift`、`TransientStatusMessageTests.swift` |
 | `tools/mrm/` | 命令行 `mrm` 与 `doom` 规划/执行，复用本域采样、归类与结束边界 | `DoomEngine.swift`（`planDoom` / `executeDoom`）、`main.swift`、`MRMOutput.swift` |
 | `docs/` | 本域产品行为权威契约及本知识库 | `PRODUCT_CONTRACT.md` 与本文件，2 个文件 |
 
@@ -179,6 +297,8 @@ sequenceDiagram
 | 修改启动参数缓存或 PID 复用保护 | 参数缓存 | `MacResourceMonitor/Services/ArgumentCache.swift` · `arguments(for:)`、`prune(keeping:)` | 参数按 PID 与启动时间缓存，随存活身份清理。 |
 | 修改责任 PID 取得方式 | 系统责任归属 | `MacResourceMonitor/Services/Responsibility.swift` · `pidResponsible(for:)` | 动态读取责任 PID，失败时退回当前 PID。 |
 | 修改人话名、聚合规则、系统保护或结束按钮是否锁定 | 展示归类 | `MacResourceMonitor/Services/DisplayClassifier.swift` · `rows()`、`makeRow()`、`isProtected()` | 负责从原始记录产生平表和安全标记。 |
+| 修改整机 CPU 口径、跨用户进程或 `kernel_task` 行 | 整机负载与跨用户采样 | `MacResourceMonitor/Services/SystemCPULoad.swift` · `ForeignProcessCPU.swift`、`ProcessSampler.snapshot()` | 表头与双环用系统拍数差；`ps` 只在表打开期间运行；`kernel_task` 用余量且系统保护。 |
+| 修改 `pi` / `Cursor Agent` 工作区后缀 | 工作区识别 | `MacResourceMonitor/Services/ProcessWorkingDirectory.swift`、`DisplayClassifier.displayName()` | 只查少量助手进程的 cwd，取末段目录名。 |
 | 修改默认排名、忙碌阈值、可见数量或钉位插入 | 表内排名 | `MacResourceMonitor/Services/ProcessListModel.swift` · `ProcessTableRanking.visibleRows()` | CPU/内存均为降序，钉行仍用更新后的数值。 |
 | 修改结束权限、单项/批量强制结束或失败判断 | 终止执行 | `MacResourceMonitor/Services/ProcessTerminator.swift` · `ProcessTerminator.end()`、`endAll()` | 复核成员身份与安全标记后直接强制结束。 |
 | 修改 doom 候选、额外排除或杀后核验 | doom 规划与执行 | `tools/mrm/DoomEngine.swift` · `planDoom()`、`executeDoom()`、`callerProtectedPIDs()` | 在 `canEnd` 之上再排除自身、调用方终端链（含终端 GUI）、监控与 nettop 采样；杀后按存活重读核验；输出用重定向接，管道 helper 会被一起结束（行为权威见产品契约命令行节）。 |
@@ -197,6 +317,7 @@ sequenceDiagram
 | `RawProcess.identity` | `MacResourceMonitor/Models/ProcessRow.swift` | PID 与启动时间的复合身份 | 用于防 PID 复用；不能将参数缓存或 CPU 历史只按 PID 键控。 |
 | `RawProcess.ppid` 与 `responsiblePID` | `MacResourceMonitor/Models/ProcessRow.swift` | Unix 父关系与系统责任关系 | 两者都用于归类线索，但产品结果是平表，不应改成父子树。 |
 | `RawProcess.cpuPercent` | `MacResourceMonitor/Models/ProcessRow.swift` | 单个 PID 的整机逻辑核 CPU 占比 | 由前后采样差计算，不是累计时间或单核百分比。 |
+| `snapshot.totalCPUPercent` | `MacResourceMonitor/Services/ProcessSampler.swift` | CPU aggregate for the current pass | Valid on a metrics-only pass; never derived from retained detailed rows. |
 | `RawProcess.memoryBytes` | `MacResourceMonitor/Models/ProcessRow.swift` | 单个 PID 的物理占用字节数 | 使用 physical footprint；不要改成 resident 口径。 |
 | `ProcessRow.memberIdentities` / `memberPIDs` | `MacResourceMonitor/Models/ProcessRow.swift` | 一行包含的成员身份；`memberPIDs` 为派生只读视图 | 结束与存活检测必须用身份；禁止只按 PID 发 SIGKILL。 |
 | `ProcessRow.cpuPercent` 与 `memoryPercent` | `MacResourceMonitor/Models/ProcessRow.swift` | 行级 CPU 与行级物理内存百分比 | 行内存不是系统内存；表头内存不能由它累加。 |
@@ -217,7 +338,9 @@ sequenceDiagram
 ## §6 核心业务规则与隐性约束
 
 - 【叫法统一】正文中的“实时占用与结束”对应 `ProcessListModel` 协调的采样、平表、排名与结束链路；不要把它缩成“进程列表”后遗漏结束、安全或系统汇总。
-- **AI 易错点**【禁止】把 CPU 改成单核或累计 CPU 时间 -> 必须保持两次采样的 Δ(user+system) / (墙钟秒 × 逻辑核数) × 100，并限制在 0–100%（原因：产品展示的是整机逻辑核占比，且与菜单栏指标同口径）。
+- **AI 易错点**【禁止】把 CPU 改成单核或累计 CPU 时间 -> 必须保持两次采样的 Δ(user+system) / (单调墙钟秒 × 逻辑核数) × 100，并限制在 0–100%（原因：产品展示的是整机逻辑核占比，且与菜单栏指标同口径）。行 CPU 保持这套算法；表头与双环必须读 `HOST_CPU_LOAD_INFO` 短窗滑动均值，不得再用行相加；推断 `kernel_task` 必须以 `hostSystem - ownedSystem` 封顶并在 `/bin/ps` 返回后同步采集（原因：时间窗错位与已退出用户态构建会虚抬 `kernel_task`）。
+- **AI 易错点**【禁止】在表收起时运行 `/bin/ps` 或任何子进程 —> 跨用户采样只在 detailed pass（表打开）运行（原因：后台每秒派生子进程正是 2026-09 风扇缺陷的成因）。
+- **AI 易错点**【禁止】把终端、`tmux`、`Cursor.app`、Corral 或桌面 App 拉起的命令折进某个助手行 -> 折叠只沿父链找到 `pi` / `Cursor Agent` 且中途没遇到终端类进程（原因：结束这一行会连带杀掉用户没指向的对象）。
 - **AI 易错点**【禁止】将每一行 `memoryPercent` 相加写进表头 -> 必须继续读取系统级物理内存占比（原因：行模型是可见责任对象的 physical footprint 聚合，无法代表整机已占用内存）。
 - **AI 易错点**【禁止】用 PID 单独作为缓存或 CPU 历史身份 -> 必须使用 PID 加启动时间的 `ProcessIdentity`（原因：PID 会复用，旧参数和旧样本会错误附着到新进程）。
 - **AI 易错点**【禁止】结束流程只按 PID 发 SIGKILL -> 必须在每次发信号前用启动时刻核对仍是同一进程，并跳过仍被判为系统保护的目标（原因：PID 复用或误折进应用行的系统助手会被误杀）。
@@ -261,6 +384,12 @@ xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -des
 检查：CPU 与内存均降序；忙碌筛选不让空闲行挤占首屏；百分比保持一位小数；钉住行保留原位置、采用新数值、消失时没有幽灵行。
 
 ```bash
+xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -destination 'platform=macOS' test -only-testing:MacResourceMonitorTests/CPUSampleTests
+```
+
+检查：`HOST_CPU_LOAD_INFO` 差值换算、`ps` 时间解析、`kernel_task` 余量行不可结束、跨用户行不可结束。
+
+```bash
 xcodebuild -project MacResourceMonitor.xcodeproj -scheme MacResourceMonitor -destination 'platform=macOS' test -only-testing:MacResourceMonitorTests/DisplayClassifierTests
 ```
 
@@ -284,6 +413,7 @@ xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme Ma
 6. 点击表头 `×`，确认弹窗显示当前候选数量与未保存内容风险；先取消并确认没有进程被结束。批量确认只用专门启动的无害测试进程做受控验收，禁止拿用户正在工作的应用做样本。
 7. 验证系统保护行和其他用户行的结束符号不可用，Mac Resource Monitor 自身不进入批量候选，并显示正确限制说明。
 8. 若出现结束失败提示：必须能读到文案、不是红色、大约 3 秒后自己消失；关掉表再打开不得还挂着旧提示。
+9. 制造持续高负载后打开表：表头 `CPU` 必须与 `top -l 2` 的整机负载同一量级；`WindowServer`、`kernel_task` 等跨用户/系统行显示真实占用且结束符号置灰；`pi` 行带工作区名并把 `tsc`/单测子进程算进同一行；`Corral.app`、各 `Corral TUI`、`Corral Remote` 分开成行，`tmux` 保活不被吸进 Corral。收起表 60 秒后不得再出现 `ps` 子进程。
 
 真实菜单栏呈现和真实结束操作尚待每次影响本域的改动当次验证；本知识库不把历史构建或单测当成替代证据。
 
@@ -309,7 +439,7 @@ xcodegen generate && xcodebuild -project MacResourceMonitor.xcodeproj -scheme Ma
 
 | 结论范围 | 已有直接证据 | 尚未替代的证据 |
 |---|---|---|
-| CPU 整机口径 | `CPUTime.percent()`、采样实现与 CPU 上限测试 | 真机在原生与 Rosetta 场景的当次读数对照。 |
+| CPU 整机口径 | `SystemCPULoad`（`HOST_CPU_LOAD_INFO`）、`ForeignProcessCPU`、`CPUTime.percent()`、`CPUSampleTests` 与 2026-11-16 真机对照 | Rosetta 转译场景当次实测与单行/批量真实结束交互。 |
 | 行级物理内存 | `ProcessSampler.physicalFootprint()` 与展示行聚合实现 | 真机不同进程类型的实际数值抽样。 |
 | 系统内存表头 | `ProcessSampler.readMemoryUsagePercent()` 与产品契约 | 当次菜单栏和表头同拍的视觉对照。 |
 | 人话名 | 归类器实现和 ChatGPT、Cursor、pi、Corral 测试 | 未覆盖的新解释器、工具或桌面应用家族。 |

@@ -613,6 +613,132 @@
         }
       }
     },
+    "table.whitelist.add": {
+      "comment": "Process row context menu: protect this row from ending",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to Whitelist"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入白名单"
+          }
+        }
+      }
+    },
+    "table.whitelist.remove": {
+      "comment": "Process row context menu: allow ending again",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Whitelist"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移出白名单"
+          }
+        }
+      }
+    },
+    "table.end.disabled.whitelisted": {
+      "comment": "Why End is disabled for whitelisted rows",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whitelisted — remove from whitelist to end."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在白名单中，移出后才能结束。"
+          }
+        }
+      }
+    },
+    "settings.whitelist": {
+      "comment": "Settings section title for the end-protection list",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whitelist"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白名单"
+          }
+        }
+      }
+    },
+    "settings.whitelist.empty": {
+      "comment": "Settings whitelist empty state",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing protected yet. Right-click a row to keep it from being ended."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有保护任何进程。在列表里右键一行就能加入。"
+          }
+        }
+      }
+    },
+    "settings.whitelist.footer": {
+      "comment": "Settings whitelist explanation",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whitelisted rows cannot be ended, including bulk end and mrm doom."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白名单里的行不会被结束，包括表头批量和 mrm doom。"
+          }
+        }
+      }
+    },
+    "settings.whitelist.remove": {
+      "comment": "Settings whitelist row remove button",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除"
+          }
+        }
+      }
+    },
     "settings.general": {
       "comment": "Settings section title",
       "extractionState": "manual",

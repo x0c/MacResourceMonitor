@@ -8,9 +8,19 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) static weak var shared: AppDelegate?
     let listModel = ProcessListModel()
-    private lazy var networkListModel = NetworkListModel { [weak self] in
-        self?.listModel.latestRows ?? []
-    }
+    private lazy var networkListModel = NetworkListModel(
+        onSamplingChange: { [weak self] required in
+            self?.listModel.setNetworkSamplingRequired(required)
+        },
+        ensureProcessRows: { [weak self] in
+            guard let self else { return [] }
+            await self.listModel.ensureDetailedRows()
+            return self.listModel.latestRows
+        },
+        processRows: { [weak self] in
+            self?.listModel.latestRows ?? []
+        }
+    )
     private let networkSpeedMonitor = NetworkSpeedMonitor()
     private var statusItemController: StatusItemController?
     private var compactPanel: CompactPanel?

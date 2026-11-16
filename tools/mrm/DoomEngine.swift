@@ -168,7 +168,8 @@ func planDoom(
     selfPID: pid_t,
     excludes: [String],
     includeCaller: Bool,
-    includeMonitor: Bool
+    includeMonitor: Bool,
+    whitelist: [WhitelistedApp] = []
 ) -> DoomPlan {
     let callerPIDs = callerProtectedPIDs(selfPID: selfPID, ancestors: ancestors)
     var candidates: [ProcessRow] = []
@@ -176,6 +177,10 @@ func planDoom(
     for row in rows {
         if !row.canEnd {
             skipped.append((row, row.isCurrentUser ? "protected" : "other_user"))
+            continue
+        }
+        if EndWhitelist.isWhitelisted(row, entries: whitelist) {
+            skipped.append((row, "whitelisted"))
             continue
         }
         if row.skipsBulkEnd {
@@ -222,6 +227,7 @@ func reasonTag(_ reason: String) -> String {
     case "caller": return MRMLang.pick("your terminal chain, kept", "当前终端链，保留")
     case "monitor": return MRMLang.pick("monitor, kept", "监控自身，保留")
     case "excluded": return MRMLang.pick("excluded by flag, kept", "按参数排除，保留")
+    case "whitelisted": return MRMLang.pick("whitelisted, kept", "白名单，保留")
     case "relaunches": return MRMLang.pick("relaunched by macOS, kept", "系统会自动重开，保留")
     default: return reason
     }
@@ -234,8 +240,9 @@ struct DoomResult {
     var failed: [ProcessRow]
 }
 
-func executeDoom(candidates: [ProcessRow]) async -> DoomResult {
-    let targets = Array(Set(candidates.flatMap(\.memberIdentities)))
+func executeDoom(candidates: [ProcessRow], whitelist: [WhitelistedApp] = []) async -> DoomResult {
+    let effective = candidates.filter { !EndWhitelist.isWhitelisted($0, entries: whitelist) }
+    let targets = Array(Set(effective.flatMap(\.memberIdentities)))
     guard !targets.isEmpty else { return DoomResult(killed: [], failed: []) }
 
     for identity in targets where shouldSignal(identity) {
@@ -247,11 +254,11 @@ func executeDoom(candidates: [ProcessRow]) async -> DoomResult {
 
     let still = Set(targets.filter(isSameProcess))
     if still.isEmpty {
-        return DoomResult(killed: candidates, failed: [])
+        return DoomResult(killed: effective, failed: [])
     }
     var killed: [ProcessRow] = []
     var failed: [ProcessRow] = []
-    for row in candidates {
+    for row in effective {
         let alive = row.memberIdentities.contains(where: { still.contains($0) })
         if alive { failed.append(row) } else { killed.append(row) }
     }

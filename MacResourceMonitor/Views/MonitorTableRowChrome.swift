@@ -11,8 +11,10 @@ struct MonitorTableRowChrome<Metrics: View>: View {
     let canEnd: Bool
     let isSystemProtected: Bool
     let isCurrentUser: Bool
+    let isWhitelisted: Bool
     let onEnd: () -> Void
     let onEndHover: (Bool) -> Void
+    let onToggleWhitelist: () -> Void
     let accessibilityText: String
     @ViewBuilder var metrics: () -> Metrics
 
@@ -53,6 +55,17 @@ struct MonitorTableRowChrome<Metrics: View>: View {
             } label: {
                 Label(String(localized: "table.copyName"), systemImage: "doc.on.doc")
             }
+
+            Divider()
+
+            Button {
+                onToggleWhitelist()
+            } label: {
+                Label(
+                    String(localized: isWhitelisted ? "table.whitelist.remove" : "table.whitelist.add"),
+                    systemImage: isWhitelisted ? "shield.slash" : "shield"
+                )
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
@@ -83,7 +96,7 @@ struct MonitorTableRowChrome<Metrics: View>: View {
 
     @ViewBuilder
     private var endButton: some View {
-          let enabled = canEnd
+          let enabled = canEnd && !isWhitelisted
           Button(action: onEnd) {
               EndButtonIcon(isHighlighted: enabled && hoveringEnd)
         }
@@ -110,6 +123,9 @@ struct MonitorTableRowChrome<Metrics: View>: View {
     }
 
     private var helpText: String {
+        if isWhitelisted {
+            return String(localized: "table.end.disabled.whitelisted")
+        }
         if isSystemProtected {
             return String(localized: "table.end.disabled.system")
         }

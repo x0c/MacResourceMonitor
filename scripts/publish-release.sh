@@ -248,6 +248,10 @@ xcrun stapler staple "${APP_PATH}" || die "装订票据失败"
 # ---------- 4. 生成 Sparkle 更新包与清单 ----------
 log_step "生成 Sparkle 签名更新包与 appcast"
 release_notes_file="${work_dir}/release-notes.md"
+if [[ -n "${RELEASE_NOTES_FILE:-}" && -f "${RELEASE_NOTES_FILE}" ]]; then
+  # Release train: notes prepared from CHANGELOG.md (English first, then Simplified Chinese).
+  cp "${RELEASE_NOTES_FILE}" "${release_notes_file}"
+else
 cat > "${release_notes_file}" <<EOF
 Mac Resource Monitor ${version}
 
@@ -262,6 +266,7 @@ Mac Resource Monitor ${version}
 - 保留静默启动、开机自启待批准提示、窗口位置记忆和关窗不退出的行为。
 
 EOF
+fi
 
 appcast_dir="${work_dir}/appcast"
 mkdir -p "${appcast_dir}"

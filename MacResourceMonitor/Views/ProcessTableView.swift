@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ProcessTableView: View {
     @Bindable var model: ProcessListModel
+    @Bindable private var whitelist = WhitelistStore.shared
 
     var body: some View {
         VStack(spacing: 0) {

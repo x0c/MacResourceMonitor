@@ -59,6 +59,7 @@ final class ProcessListModel {
     private let sampler = ProcessSampler()
     private var listLoop: Task<Void, Never>?
     private var panelVisible = false
+    private var networkSamplingRequired = false
     private var hasCPUReading = false
     private var isRefreshing = false
     private var pinnedRowID: String?
@@ -66,6 +67,10 @@ final class ProcessListModel {
     private var unpinTask: Task<Void, Never>?
     /// 进行中的结束行；防止连点或网络表与进程表重叠并发杀同一批 PID。
     private var endingRowIDs: Set<String> = []
+    @ObservationIgnored private var latestSystemCPUPercent = 0.0
+    @ObservationIgnored private var latestSystemMemoryPercent = 0.0
+    @ObservationIgnored private var lastRefreshCollectedDetails = false
+    @ObservationIgnored private var refreshWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var metricsObserver: ((Double, Double) -> Void)?
 
     var listFrozen: Bool = AppPreferences.listFrozenDefault {
@@ -107,8 +112,17 @@ final class ProcessListModel {
         )
     }
 
+    /// Any open table asks for detailed rows: those passes also sample cross-UID CPU.
+    private var detailDemand: Bool {
+        panelVisible || networkSamplingRequired
+    }
+
     var bulkEndCandidates: [ProcessRow] {
-        ProcessTerminationSelection.bulkCandidates(from: rows, excludingPID: getpid())
+        ProcessTerminationSelection.bulkCandidates(
+            from: rows,
+            excludingPID: getpid(),
+            whitelist: WhitelistStore.shared.entries
+        )
     }
 
     func selectSort(_ column: ProcessSortColumn) {
@@ -138,7 +152,13 @@ final class ProcessListModel {
         panelVisible = visible
         applyRunState()
         if visible {
-            Task { await refresh() }
+            // Sync latest background totals immediately on open without mutating Observable while hidden.
+            systemCPUPercent = latestSystemCPUPercent
+            systemMemoryPercent = latestSystemMemoryPercent
+            if rows.isEmpty, !latestRows.isEmpty {
+                rows = latestRows
+            }
+            Task { await ensureDetailedRows() }
         } else {
             clearPin()
             clearEndFailure()
@@ -149,6 +169,27 @@ final class ProcessListModel {
         start()
     }
 
+    func setNetworkSamplingRequired(_ required: Bool) {
+        networkSamplingRequired = required
+        if required {
+            Task { await ensureDetailedRows() }
+        }
+    }
+
+    /// Guarantee at least one detailed refresh completes even if a hidden pass was mid-flight.
+    func ensureDetailedRows() async {
+        while isRefreshing {
+            await withCheckedContinuation { continuation in
+                refreshWaiters.append(continuation)
+            }
+        }
+        if !lastRefreshCollectedDetails || latestRows.isEmpty {
+            await refresh(forceDetails: true)
+        } else if panelVisible {
+            await refresh()
+        }
+    }
+
     func start() {
         guard listLoop == nil else { return }
         listLoop = Task { [weak self] in
@@ -156,7 +197,10 @@ final class ProcessListModel {
             try? await Task.sleep(for: .milliseconds(350))
             await self?.refresh()
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(AppPreferences.refreshInterval))
+                let interval = (self?.detailDemand ?? false)
+                    ? AppPreferences.visibleRefreshInterval
+                    : AppPreferences.refreshInterval
+                try? await Task.sleep(for: .seconds(interval), tolerance: .milliseconds(150))
                 await self?.refresh()
             }
         }
@@ -167,20 +211,34 @@ final class ProcessListModel {
         listLoop = nil
     }
 
-    func refresh() async {
+    func refresh(forceDetails: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            isRefreshing = false
+            let waiters = refreshWaiters
+            refreshWaiters.removeAll(keepingCapacity: true)
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
 
-        let snapshot = await sampler.snapshot()
-        let records = snapshot.records
-        let memory = await sampler.memoryBytes
-        let updatedRows = DisplayClassifier.rows(
-            from: records,
-            currentUID: getuid(),
-            physicalMemory: memory
+        // Retain complete rows while hidden; network warmup/open also needs fresh identities.
+        let collectDetails = forceDetails || panelVisible || networkSamplingRequired || latestRows.isEmpty
+        let snapshot = await sampler.snapshot(
+            collectDetails: collectDetails,
+            includeForeignCPU: panelVisible
         )
-        latestRows = updatedRows
+        lastRefreshCollectedDetails = collectDetails
+        if collectDetails {
+            let memory = await sampler.memoryBytes
+            latestRows = DisplayClassifier.rows(
+                from: snapshot.records,
+                currentUID: getuid(),
+                physicalMemory: memory
+            )
+        }
+        let updatedRows = latestRows
         if panelVisible {
             if rows.isEmpty {
                 rows = updatedRows
@@ -194,13 +252,18 @@ final class ProcessListModel {
                 clearPin()
             }
         }
-        let cpuPercent = updatedRows.reduce(0) { $0 + $1.cpuPercent }
         if snapshot.cpuSampleReady {
             hasCPUReading = true
-            systemCPUPercent = min(max(cpuPercent, 0), 100)
+            latestSystemCPUPercent = snapshot.totalCPUPercent
+            if panelVisible {
+                systemCPUPercent = snapshot.totalCPUPercent
+            }
         }
         if let memoryPercent = await sampler.memoryUsagePercent {
-            systemMemoryPercent = memoryPercent
+            latestSystemMemoryPercent = memoryPercent
+            if panelVisible {
+                systemMemoryPercent = memoryPercent
+            }
         }
         notifyMetrics()
     }
@@ -232,7 +295,7 @@ final class ProcessListModel {
 
     private func notifyMetrics() {
         guard hasCPUReading else { return }
-        metricsObserver?(systemCPUPercent, systemMemoryPercent)
+        metricsObserver?(latestSystemCPUPercent, latestSystemMemoryPercent)
     }
 
     private func showEndFailure(_ message: String) {

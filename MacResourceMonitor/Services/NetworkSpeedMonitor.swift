@@ -32,11 +32,13 @@ final class NetworkSpeedMonitor {
         }
         pathMonitor.start(queue: pathQueue)
         setDefaultInterface(Self.defaultRouteInterfaceName())
-        sampleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.sample()
             }
         }
+        timer.tolerance = 0.15
+        sampleTimer = timer
     }
 
     func stop() {

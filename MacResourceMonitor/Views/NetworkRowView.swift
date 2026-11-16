@@ -5,6 +5,7 @@ struct NetworkRowView: View {
     let row: NetworkProcessRow
     let onEnd: () -> Void
     let onEndHover: (Bool) -> Void
+    @Bindable private var whitelist = WhitelistStore.shared
 
     var body: some View {
         MonitorTableRowChrome(
@@ -15,8 +16,10 @@ struct NetworkRowView: View {
             canEnd: row.process.canEnd,
             isSystemProtected: row.process.isSystemProtected,
             isCurrentUser: row.process.isCurrentUser,
+            isWhitelisted: whitelist.isWhitelisted(row.process),
             onEnd: onEnd,
             onEndHover: onEndHover,
+            onToggleWhitelist: { whitelist.toggle(row.process) },
             accessibilityText: accessibilityText
         ) {
             rateCell(bytesPerSecond: row.uploadBytesPerSecond)

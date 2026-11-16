@@ -3,6 +3,48 @@ import XCTest
 @testable import MacResourceMonitor
 
 final class ProcessTableRankingTests: XCTestCase {
+    func testMetricsOnlySnapshotRetainsCPUBaselineWithoutPublishingPartialRows() async {
+        let sampler = ProcessSampler(reapOrphans: false)
+        let detailed = await sampler.snapshot()
+        let identity = detailed.records.first { $0.pid == getpid() }?.identity
+        XCTAssertNotNil(identity)
+        // First pass has no previous host ticks, so the header falls back to the row sum.
+        XCTAssertFalse(detailed.cpuSampleReady)
+        XCTAssertEqual(
+            detailed.totalCPUPercent,
+            min(100, detailed.records.reduce(0) { $0 + $1.cpuPercent }),
+            accuracy: 0.0001
+        )
+
+        // HOST_CPU_LOAD_INFO advances with scheduler ticks, so wait for a measurable delta.
+        try? await Task.sleep(for: .milliseconds(150))
+        let metrics = await sampler.snapshot(collectDetails: false)
+        XCTAssertTrue(metrics.records.isEmpty)
+        XCTAssertTrue(metrics.cpuSampleReady)
+        XCTAssertTrue((0...100).contains(metrics.totalCPUPercent))
+
+        try? await Task.sleep(for: .milliseconds(150))
+        let reopened = await sampler.snapshot()
+        XCTAssertEqual(reopened.records.first { $0.pid == getpid() }?.identity, identity)
+        XCTAssertTrue(reopened.cpuSampleReady)
+        // The header now reports whole-machine load from HOST_CPU_LOAD_INFO; row CPU is
+        // still the per-process delta, so the two are not required to add up.
+        XCTAssertTrue((0...100).contains(reopened.totalCPUPercent))
+    }
+
+    func testCancelledNetworkWarmupReturnsWithoutStartingSampler() async {
+        let task = Task {
+            // Ensure cancellation is present before entering the sampler.
+            while !Task.isCancelled { await Task.yield() }
+            let started = ContinuousClock.now
+            await ProcessNetworkSampler().waitForFirstFrame(timeoutSeconds: 2.5)
+            return ContinuousClock.now - started
+        }
+        task.cancel()
+        let elapsed = await task.value
+        XCTAssertLessThan(elapsed, .milliseconds(500))
+    }
+
     func testCPUSortPutsHighestCPUFirst() {
         let rows = [
             makeRow(name: "LowCPU", cpu: 1, memory: 40),
@@ -234,6 +276,26 @@ final class ProcessTableRankingTests: XCTestCase {
         model.selectSort(.memory)
         XCTAssertFalse(model.listFrozen)
         XCTAssertEqual(model.sortColumn, .memory)
+    }
+
+    @MainActor
+    func testHiddenProcessListSuppressesObservableHeaderMutationsUntilOpened() async throws {
+        let model = ProcessListModel()
+        defer { model.stop() }
+        var observedMemory: Double = 0
+        model.setMetricsObserver { _, memory in
+            observedMemory = memory
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while observedMemory <= 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertGreaterThan(observedMemory, 0, "Menu bar ring observer must still receive background metrics")
+        XCTAssertEqual(model.systemMemoryPercent, 0, "Hidden panel must not mutate @Observable header fields")
+
+        model.setPanelVisible(true)
+        XCTAssertGreaterThan(model.systemMemoryPercent, 0, "Opening panel must immediately sync latest header totals")
+        model.setPanelVisible(false)
     }
 
     private func makeRow(

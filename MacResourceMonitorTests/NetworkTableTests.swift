@@ -78,11 +78,53 @@ final class NettopStreamSamplerParseTests: XCTestCase {
             )
         )
         XCTAssertTrue(
+            NettopStreamSampler.matchesSamplerArguments(
+                ["/usr/bin/nettop"] + NettopStreamSampler.singleShotArguments
+            )
+        )
+        XCTAssertTrue(
+            NettopStreamSampler.matchesSamplerArguments(
+                ["/usr/bin/nettop", "-P", "-L", "1", "-x", "-n", "-J", "bytes_in"]
+            )
+        )
+        XCTAssertTrue(
             NettopStreamSampler.isSamplerProcess(
                 path: "/usr/bin/nettop",
                 arguments: ["/usr/bin/nettop"] + NettopStreamSampler.arguments
             )
         )
+    }
+
+    func testCumulativeSnapshotsDiffIntoPerSecondRates() {
+        let sampler = NettopStreamSampler()
+        defer { sampler.stop() }
+
+        sampler.ingestSnapshotForTesting(
+            [42: (received: 10_000, sent: 5_000), 99: (received: 500, sent: 500)],
+            elapsedSeconds: 0.25
+        )
+        XCTAssertFalse(sampler.hasFrame, "Baseline snapshot must not publish historical cumulative totals as rates")
+
+        sampler.ingestSnapshotForTesting(
+            [42: (received: 12_500, sent: 5_500), 99: (received: 500, sent: 500)],
+            elapsedSeconds: 0.25
+        )
+        let first = sampler.latestSampleSnapshot()
+        XCTAssertTrue(first.hasFrame)
+        XCTAssertEqual(first.sequence, 1)
+        XCTAssertEqual(first.rates[42]?.receivedBytesPerSecond ?? -1, 10_000, accuracy: 0.1)
+        XCTAssertEqual(first.rates[42]?.sentBytesPerSecond ?? -1, 2_000, accuracy: 0.1)
+        XCTAssertNil(first.rates[99], "Idle process with zero delta must be omitted from active rates")
+
+        // Counter reset / PID wrap must clamp to zero rather than underflowing.
+        sampler.ingestSnapshotForTesting(
+            [42: (received: 1_000, sent: 1_000)],
+            elapsedSeconds: 1.0
+        )
+        let second = sampler.latestSampleSnapshot()
+        XCTAssertTrue(second.hasFrame)
+        XCTAssertEqual(second.sequence, 2)
+        XCTAssertTrue(second.rates.isEmpty)
     }
 }
 
@@ -90,6 +132,25 @@ final class NettopStreamSamplerParseTests: XCTestCase {
 final class NetworkListSamplingLifecycleTests: XCTestCase {
     func testWarmupBudgetIsFinite() {
         XCTAssertEqual(NetworkListModel.warmupSampleBudget, 2)
+    }
+
+    func testShouldApplySampleDistinguishesMissingFirstFrameFromIdleFrame() {
+        XCTAssertFalse(NetworkListModel.shouldApplySample(hasFrame: false))
+        XCTAssertTrue(NetworkListModel.shouldApplySample(hasFrame: true))
+    }
+
+    func testFirstLiveNetworkFrameArrivesSubSecond() async {
+        let sampler = ProcessNetworkSampler()
+        let start = ContinuousClock.now
+        await sampler.waitForFirstFrame(timeoutSeconds: 1.5)
+        let elapsed = start.duration(to: ContinuousClock.now)
+        let hasFrame = await sampler.hasFrame
+        await sampler.shutdown()
+
+        let elapsedSeconds = Double(elapsed.components.seconds)
+            + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000_000
+        XCTAssertTrue(hasFrame, "Initial probe should publish a real delta frame before the 1s stream tick")
+        XCTAssertLessThan(elapsedSeconds, 0.9, "Opening the network table should produce fresh rates in well under 1s")
     }
 
     func testClosingPanelKeepsRetainedRows() async throws {
@@ -347,6 +408,57 @@ final class StatusItemPanelTargetTests: XCTestCase {
             StatusItemPanelTarget.statusItemCreationOrder,
             [.networkDownload, .process]
         )
+    }
+
+    func testRenderKeysPreserveZeroBoundaryAndCoalesceJitter() {
+        let zero = MenuBarIconRenderer.RingRenderKey(cpuPercent: 0, memoryPercent: 0, scale: 2)
+        let tiny = MenuBarIconRenderer.RingRenderKey(cpuPercent: 0.05, memoryPercent: 0, scale: 2)
+        let full = MenuBarIconRenderer.RingRenderKey(cpuPercent: 100, memoryPercent: 50, scale: 2)
+        let nearFull = MenuBarIconRenderer.RingRenderKey(cpuPercent: 99.6, memoryPercent: 50, scale: 2)
+        XCTAssertNotEqual(zero, tiny, "0% must stay an empty ring and never coalesce with non-zero usage")
+        XCTAssertNotEqual(full, nearFull, "100% full ellipse must stay distinct from partial arc")
+
+        let idleA = MenuBarIconRenderer.RingRenderKey(cpuPercent: 6.08, memoryPercent: 61.04, scale: 2)
+        let idleB = MenuBarIconRenderer.RingRenderKey(cpuPercent: 6.19, memoryPercent: 61.18, scale: 2)
+        XCTAssertEqual(idleA, idleB, "Sub-step CPU/memory jitter must coalesce to avoid redundant status bar snapshots")
+
+        let netA = MenuBarIconRenderer.NetworkRenderKey(uploadBytesPerSecond: 120, downloadBytesPerSecond: 0, scale: 2)
+        let netB = MenuBarIconRenderer.NetworkRenderKey(uploadBytesPerSecond: 480, downloadBytesPerSecond: 0, scale: 2)
+        XCTAssertEqual(netA, netB, "Identical formatted `<1` / `0 KB/s` readings must share the same render key")
+    }
+
+    func testStatusItemControllerIsolatesAndDeduplicatesRenders() {
+        let preferences = MenuBarDisplayPreferences.shared
+        let originalShows = preferences.showsNetworkSpeed
+        preferences.showsNetworkSpeed = true
+        defer { preferences.showsNetworkSpeed = originalShows }
+
+        let controller = StatusItemController(
+            onOpenPanel: { _ in },
+            onOpenMainWindow: {},
+            onOpenSettings: {},
+            onCheckForUpdates: {},
+            onQuit: {}
+        )
+        defer { controller.invalidate() }
+        let initialRing = controller.ringRenderCount
+        let initialNetwork = controller.networkRenderCount
+
+        controller.updateMetrics(cpuPercent: 10.05, memoryPercent: 50.05)
+        let afterFirstMetricsRing = controller.ringRenderCount
+        XCTAssertEqual(afterFirstMetricsRing, initialRing + 1)
+        XCTAssertEqual(controller.networkRenderCount, initialNetwork, "CPU/memory tick must not re-render network status item")
+
+        controller.updateMetrics(cpuPercent: 10.12, memoryPercent: 50.11)
+        XCTAssertEqual(controller.ringRenderCount, afterFirstMetricsRing, "Unchanged quantized ring key must skip bitmap redraw")
+
+        controller.updateNetworkSpeed(uploadBytesPerSecond: 200, downloadBytesPerSecond: 0)
+        let afterFirstNet = controller.networkRenderCount
+        XCTAssertEqual(afterFirstNet, initialNetwork + 1)
+        XCTAssertEqual(controller.ringRenderCount, afterFirstMetricsRing, "Network tick must not re-render ring status item")
+
+        controller.updateNetworkSpeed(uploadBytesPerSecond: 350, downloadBytesPerSecond: 0)
+        XCTAssertEqual(controller.networkRenderCount, afterFirstNet, "Identical `<1` / `0 KB/s` display must skip bitmap redraw")
     }
 
 }

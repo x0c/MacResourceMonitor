@@ -23,8 +23,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: SHZQ3MWP3B
-    CURRENT_PROJECT_VERSION: 43
-    MARKETING_VERSION: 1.1.7
+    CURRENT_PROJECT_VERSION: 44
+    MARKETING_VERSION: 1.1.8
     COMBINE_HIDPI_IMAGES: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     SWIFT_STRICT_CONCURRENCY: complete
@@ -78,7 +78,11 @@ targets:
       - path: MacResourceMonitor/Models/ProcessRow.swift
       - path: MacResourceMonitor/Models/NetworkProcessRow.swift
       - path: MacResourceMonitor/Services/DisplayClassifier.swift
+      - path: MacResourceMonitor/Services/EndWhitelist.swift
       - path: MacResourceMonitor/Services/ProcessSampler.swift
+      - path: MacResourceMonitor/Services/SystemCPULoad.swift
+      - path: MacResourceMonitor/Services/ForeignProcessCPU.swift
+      - path: MacResourceMonitor/Services/ProcessWorkingDirectory.swift
       - path: MacResourceMonitor/Services/ArgumentCache.swift
       - path: MacResourceMonitor/Services/Responsibility.swift
       - path: MacResourceMonitor/Services/CPUTime.swift
@@ -108,8 +112,8 @@ targets:
         excludes:
           - AppIcon.icon
           - "AppIcon.icon/**"
-    resources:
       - path: MacResourceMonitor/AppIcon.icon
+        buildPhase: resources
     entitlements:
       path: MacResourceMonitor/MacResourceMonitor.entitlements
     postbuildScripts:

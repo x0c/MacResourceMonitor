@@ -14,11 +14,13 @@ nonisolated struct RawProcess: Sendable, Hashable {
     var responsiblePID: pid_t
     var cpuPercent: Double
     var memoryBytes: UInt64
+    /// cwd leaf for `pi` / `Cursor Agent` rows, so parallel sessions stay distinguishable.
+    var workingDirectory: String? = nil
 
     var pid: pid_t { identity.pid }
 
     var executableName: String {
-        URL(fileURLWithPath: path).lastPathComponent
+        URL(fileURLWithPath: path, isDirectory: false).lastPathComponent
     }
 }
 

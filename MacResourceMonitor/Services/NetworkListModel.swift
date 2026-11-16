@@ -101,6 +101,8 @@ final class NetworkListModel {
     var sortColumn: NetworkSortColumn = defaultSortColumn
     private let sampler = ProcessNetworkSampler()
     private let processRows: @MainActor () -> [ProcessRow]
+    private let ensureProcessRows: (@MainActor () async -> [ProcessRow])?
+    private let onSamplingChange: @MainActor (Bool) -> Void
     private var listLoop: Task<Void, Never>?
     private var isRefreshing = false
     private var panelVisible = false
@@ -108,6 +110,7 @@ final class NetworkListModel {
     private var pinnedRowID: String?
     private var pinnedIndex: Int?
     private var unpinTask: Task<Void, Never>?
+    @ObservationIgnored private var lastObservedSequence: UInt64 = 0
     private var holdUntil: [String: Date] = [:]
 
     var listFrozen: Bool = AppPreferences.networkListFrozenDefault {
@@ -126,8 +129,14 @@ final class NetworkListModel {
         }
     }
 
-    init(processRows: @escaping @MainActor () -> [ProcessRow]) {
+    init(
+        onSamplingChange: @escaping @MainActor (Bool) -> Void = { _ in },
+        ensureProcessRows: (@MainActor () async -> [ProcessRow])? = nil,
+        processRows: @escaping @MainActor () -> [ProcessRow]
+    ) {
         self.processRows = processRows
+        self.ensureProcessRows = ensureProcessRows
+        self.onSamplingChange = onSamplingChange
         listFrozen = AppPreferences.readListFrozen(
             key: AppPreferences.networkListFrozenKey,
             legacyKey: AppPreferences.legacyNetworkRefreshEnabledKey,
@@ -149,7 +158,8 @@ final class NetworkListModel {
     var bulkEndCandidates: [ProcessRow] {
         ProcessTerminationSelection.bulkCandidates(
             from: rows.map(\.process),
-            excludingPID: getpid()
+            excludingPID: getpid(),
+            whitelist: WhitelistStore.shared.entries
         )
     }
 
@@ -212,6 +222,7 @@ final class NetworkListModel {
     }
 
     private func applyRunState() {
+        onSamplingChange(shouldSample)
         if shouldSample {
             start()
         } else {
@@ -223,21 +234,22 @@ final class NetworkListModel {
         // Keep the existing task if one is still winding down; finishLoop restarts when needed.
         guard listLoop == nil else { return }
         listLoop = Task { [weak self] in
+            self?.lastObservedSequence = 0
             await self?.sampler.prepare()
             await self?.sampler.resetBaseline()
-            // First `-d` frame is baseline; wait for the first real delta before painting.
             await self?.sampler.waitForFirstFrame()
             while !Task.isCancelled {
                 guard let self, self.shouldSample else { break }
-                let deadline = ContinuousClock.now.advanced(
-                    by: .seconds(AppPreferences.networkRefreshInterval)
-                )
                 await self.refresh()
                 if self.warmupRemaining > 0 {
                     self.warmupRemaining -= 1
                 }
                 guard !Task.isCancelled, self.shouldSample else { break }
-                try? await Task.sleep(until: deadline, clock: .continuous)
+                let observed = self.lastObservedSequence
+                await self.sampler.waitForNextFrame(
+                    after: observed,
+                    timeoutSeconds: max(AppPreferences.networkRefreshInterval + 0.25, 0.5)
+                )
             }
             await self?.sampler.shutdown()
             await MainActor.run { [weak self] in
@@ -249,6 +261,7 @@ final class NetworkListModel {
     func stopSamplingNow() {
         warmupRemaining = 0
         panelVisible = false
+        onSamplingChange(false)
         listLoop?.cancel()
         listLoop = nil
         sampler.stopSync()
@@ -260,6 +273,7 @@ final class NetworkListModel {
 
     private func finishLoop() {
         listLoop = nil
+        onSamplingChange(shouldSample)
         if shouldSample {
             start()
         }
@@ -270,23 +284,28 @@ final class NetworkListModel {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        let sampledRates = await sampler.sample()
-        // 首帧的一秒采样结束后再取责任进程快照，避免刚启动时把尚未就绪的空名单当成无流量。
-        let currentProcesses = processRows()
+        let sampled = await sampler.sampleSnapshot()
+        lastObservedSequence = max(lastObservedSequence, sampled.sequence)
+        let currentProcesses: [ProcessRow]
+        if let ensureProcessRows {
+            currentProcesses = await ensureProcessRows()
+        } else {
+            currentProcesses = processRows()
+        }
+
+        guard Self.shouldApplySample(hasFrame: sampled.hasFrame) else {
+            return
+        }
 
         let presence = NetworkListPresence.rows(
             processes: currentProcesses,
-            rates: sampledRates,
+            rates: sampled.rates,
             holdUntil: holdUntil,
             now: Date()
         )
         holdUntil = presence.holdUntil
 
         let nextRows = presence.rows
-        // Keep the retained frame when a baseline-only sample returns empty rates.
-        if nextRows.isEmpty, !rows.isEmpty, sampledRates.isEmpty {
-            return
-        }
         if rows.isEmpty {
             rows = nextRows
         } else if listFrozen {
@@ -298,6 +317,10 @@ final class NetworkListModel {
         if let pinnedRowID, !rows.contains(where: { $0.id == pinnedRowID }) {
             clearPin()
         }
+    }
+
+    nonisolated static func shouldApplySample(hasFrame: Bool) -> Bool {
+        hasFrame
     }
 
     private func showEndFailure(_ message: String) {

@@ -17,6 +17,9 @@ nonisolated enum AppPreferences {
     static let showNetworkSpeedDefault = true
 
     static let refreshInterval: TimeInterval = 1.5
+    /// 表打开时缩短一拍：新任务首帧更快出数字，也涵盖跨用户的 `/bin/ps` 采样；
+    /// 收起后回到 `refreshInterval` 且不再派生 `ps`，守住后台零耗。
+    static let visibleRefreshInterval: TimeInterval = 1.0
     /// 网络列表直接采用 nettop 的一秒差分，节奏必须与菜单栏读数一致。
     static let networkRefreshInterval: TimeInterval = 1
 

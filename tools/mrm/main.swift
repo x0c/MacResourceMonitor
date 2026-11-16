@@ -270,6 +270,7 @@ func runPs(args: [String], startedAt: Date, jsonMode: Bool) {
     }
     Task {
         let snap = await collectSnapshot()
+        let whitelist = EndWhitelist.load(from: EndWhitelist.appDefaults())
         struct PsRow: Encodable {
             var display_name: String; var kind: String; var pids: [Int32]
             var cpu_percent: Double; var memory_percent: Double; var can_end: Bool
@@ -282,7 +283,8 @@ func runPs(args: [String], startedAt: Date, jsonMode: Bool) {
             if $0.cpuPercent != $1.cpuPercent { return $0.cpuPercent > $1.cpuPercent }
             return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
-        let closable = sorted.filter(\.canEnd)
+        let closable = sorted.filter { $0.canEnd && !EndWhitelist.isWhitelisted($0, entries: whitelist) }
+        let closableMark: (ProcessRow) -> Bool = { $0.canEnd && !EndWhitelist.isWhitelisted($0, entries: whitelist) }
         let shown = Array(sorted.prefix(limit))
         if jsonMode {
             printEnvelope(
@@ -293,7 +295,7 @@ func runPs(args: [String], startedAt: Date, jsonMode: Bool) {
                               pids: $0.memberPIDs.map { Int32($0) },
                               cpu_percent: ($0.cpuPercent * 10).rounded() / 10,
                               memory_percent: ($0.memoryPercent * 10).rounded() / 10,
-                              can_end: $0.canEnd)
+                              can_end: closableMark($0))
                     },
                     scanned: snap.rawCount, matched: closable.count, returned: shown.count,
                     truncated: sorted.count > shown.count,
@@ -304,7 +306,7 @@ func runPs(args: [String], startedAt: Date, jsonMode: Bool) {
         } else {
             print(MRMLang.pick("Closable: \(closable.count) of \(snap.rows.count) rows (raw \(snap.rawCount) procs)", "可结束：\(snap.rows.count) 行里 \(closable.count) 个（原始进程 \(snap.rawCount) 个）"))
             for row in shown.prefix(20) {
-                let mark = row.canEnd ? " " : "🔒"
+                let mark = closableMark(row) ? " " : "🔒"
                 let cpu = String(format: "%.1f%%", row.cpuPercent)
                 let mem = String(format: "%.1f%%", row.memoryPercent)
                 print("\(mark) \(row.displayName)  CPU \(cpu)  Mem \(mem)  [\(row.memberPIDs.count) proc]")
@@ -330,7 +332,8 @@ func runStatus(args: [String], startedAt: Date, jsonMode: Bool) {
         let snap = await collectSnapshot()
         let ancestors = ancestorPIDs()
         let selfPID = getpid()
-        let plan = planDoom(rows: snap.rows, ancestors: ancestors, selfPID: selfPID, excludes: [], includeCaller: false, includeMonitor: false)
+        let whitelist = EndWhitelist.load(from: EndWhitelist.appDefaults())
+        let plan = planDoom(rows: snap.rows, ancestors: ancestors, selfPID: selfPID, excludes: [], includeCaller: false, includeMonitor: false, whitelist: whitelist)
         let quiet = plan.candidates.isEmpty
         struct StatusData: Encodable {
             var quiet: Bool; var closable: Int; var total_rows: Int; var scanned: Int
@@ -442,9 +445,11 @@ func runDoom(args: [String], startedAt: Date, jsonMode: Bool) {
         let snap = await collectSnapshot()
         let ancestors = ancestorPIDs()
         let selfPID = getpid()
+        let whitelist = EndWhitelist.load(from: EndWhitelist.appDefaults())
         let plan = planDoom(
             rows: snap.rows, ancestors: ancestors, selfPID: selfPID,
-            excludes: excludes, includeCaller: includeCaller, includeMonitor: includeMonitor
+            excludes: excludes, includeCaller: includeCaller, includeMonitor: includeMonitor,
+            whitelist: whitelist
         )
 
         func emitDryRun() -> Never {
@@ -577,7 +582,7 @@ func runDoom(args: [String], startedAt: Date, jsonMode: Bool) {
             }
         }
 
-        let result = await executeDoom(candidates: plan.candidates)
+        let result = await executeDoom(candidates: plan.candidates, whitelist: whitelist)
         emitResult(killed: result.killed, failed: result.failed)
     }
     RunLoop.main.run()
@@ -597,8 +602,8 @@ func printDoomPlan(candidates: [ProcessRow], skipped: Int, dryRun: Bool) {
         print(MRMLang.pick("  … \(candidates.count - 20) more", "  … 还有 \(candidates.count - 20) 个"))
     }
     print(MRMLang.pick(
-        "Skipped \(skipped) (system / other user / self / caller / monitor / Finder / excluded).",
-        "跳过 \(skipped) 个（系统/别人/自身/终端链/监控/访达/排除）。"
+        "Skipped \(skipped) (system / other user / self / caller / monitor / Finder / excluded / whitelist).",
+        "跳过 \(skipped) 个（系统/别人/自身/终端链/监控/访达/排除/白名单）。"
     ))
     if dryRun {
         print(MRMLang.pick("Re-run without --dry-run + --yes to execute.", "去掉 --dry-run 并加 --yes 才会真关。"))

@@ -92,7 +92,7 @@ final class DisplayClassifierTests: XCTestCase {
         )
         let tmux = makeProcess(pid: 40, path: "/opt/homebrew/bin/tmux", arguments: ["tmux"])
         let rows = DisplayClassifier.rows(from: [python, pi, tmux], currentUID: 501, physicalMemory: 16 << 30)
-        XCTAssertTrue(rows.contains { $0.displayName == "Corral" })
+        XCTAssertTrue(rows.contains { $0.displayName == "Corral TUI" })
         XCTAssertTrue(rows.contains { $0.displayName == "pi" })
         XCTAssertFalse(rows.contains { $0.displayName.lowercased() == "python3" })
         XCTAssertFalse(rows.contains { $0.displayName == "Python" })
@@ -296,6 +296,155 @@ final class DisplayClassifierTests: XCTestCase {
         XCTAssertLessThanOrEqual(value, 100)
     }
 
+    func testCorralInstancesSplitAndKeepTmuxAndProbePathsOut() {
+        let app = makeProcess(
+            pid: 400,
+            path: "/Applications/Corral.app/Contents/MacOS/Corral",
+            arguments: ["/Applications/Corral.app/Contents/MacOS/Corral"]
+        )
+        let tui = makeProcess(
+            pid: 401,
+            path: "/opt/homebrew/bin/corral",
+            arguments: ["corral"]
+        )
+        let remote = makeProcess(
+            pid: 402,
+            path: "/opt/homebrew/Cellar/python@3.14/3.14.10/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+            arguments: ["Python", "-m", "corral", "remote", "_serve"]
+        )
+        let worker = makeProcess(
+            pid: 403,
+            ppid: 402,
+            path: "/opt/homebrew/Cellar/python@3.14/3.14.10/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+            arguments: ["Python", "-m", "corral.scan_worker", "--limit", "200", "--parent-pid", "402"],
+            responsible: 402
+        )
+        let tmux = makeProcess(
+            pid: 404,
+            path: "/opt/homebrew/bin/tmux",
+            arguments: [
+                "tmux", "-D", "-L", "corral-keepalive",
+                "-f", "/Users/me/.cache/corral/keepalive.tmux.conf"
+            ]
+        )
+        let probe = makeProcess(
+            pid: 405,
+            path: "/var/folders/xy/corral-mac-chat-stream-abcdef/probe",
+            arguments: ["/var/folders/xy/corral-mac-chat-stream-abcdef/probe"]
+        )
+
+        let rows = DisplayClassifier.rows(
+            from: [app, tui, remote, worker, tmux, probe],
+            currentUID: 501,
+            physicalMemory: 16 << 30
+        )
+        XCTAssertEqual(rows.first { $0.displayName == "Corral" }?.memberPIDs, [400])
+        XCTAssertEqual(rows.first { $0.displayName == "Corral TUI" }?.memberPIDs, [401])
+        XCTAssertEqual(rows.first { $0.displayName == "Corral Remote" }?.memberPIDs.sorted(), [402, 403])
+        XCTAssertEqual(rows.first { $0.displayName == "tmux" }?.memberPIDs, [404])
+        XCTAssertEqual(rows.first { $0.displayName == "probe" }?.memberPIDs, [405])
+        XCTAssertFalse(rows.contains { row in
+            row.displayName.hasPrefix("Corral") && row.memberPIDs.contains(404)
+        })
+    }
+
+    func testPiRowCarriesWorkspaceAndFoldsBuildChildren() {
+        let tmux = makeProcess(pid: 500, path: "/opt/homebrew/bin/tmux", arguments: ["tmux"])
+        let pi = makeProcess(
+            pid: 501,
+            ppid: 500,
+            path: "/opt/homebrew/bin/pi",
+            arguments: ["pi"],
+            workingDirectory: "/Users/me/Codes/Subswap"
+        )
+        let shell = makeProcess(pid: 502, ppid: 501, path: "/bin/zsh", arguments: ["-zsh"], responsible: 501)
+        let tsc = makeProcess(
+            pid: 503,
+            ppid: 502,
+            path: "/opt/homebrew/bin/node",
+            arguments: [
+                "node",
+                "/Users/me/Codes/Subswap/integrations/pi/node_modules/typescript/bin/tsc",
+                "--noEmit"
+            ],
+            responsible: 501,
+            cpuPercent: 28
+        )
+        let tmuxTool = makeProcess(pid: 504, ppid: 500, path: "/usr/bin/yes", arguments: ["yes"])
+
+        let rows = DisplayClassifier.rows(
+            from: [tmux, pi, shell, tsc, tmuxTool],
+            currentUID: 501,
+            physicalMemory: 16 << 30
+        )
+        let piRow = rows.first { $0.displayName == "pi (Subswap)" }
+        XCTAssertEqual(piRow?.memberPIDs.sorted(), [501, 502, 503])
+        XCTAssertEqual(piRow?.cpuPercent ?? 0, 30, accuracy: 0.0001)
+        XCTAssertEqual(piRow?.kind, .pi)
+        XCTAssertTrue(piRow?.canEnd == true)
+        XCTAssertEqual(rows.first { $0.displayName == "yes" }?.memberPIDs, [504])
+        XCTAssertFalse(rows.contains { $0.displayName == "tsc" })
+    }
+
+    func testGenericWorkspaceLeavesIncludeParentFolder() {
+        let tmux = makeProcess(pid: 505, path: "/opt/homebrew/bin/tmux", arguments: ["tmux"])
+        let piCorralCli = makeProcess(
+            pid: 506,
+            ppid: 505,
+            path: "/opt/homebrew/bin/pi",
+            arguments: ["pi"],
+            workingDirectory: "/Users/me/Codes/Corral/cli"
+        )
+        let piSyncCli = makeProcess(
+            pid: 507,
+            ppid: 505,
+            path: "/opt/homebrew/bin/pi",
+            arguments: ["pi"],
+            workingDirectory: "/Users/me/Codes/AgentSync/cli"
+        )
+        let rows = DisplayClassifier.rows(
+            from: [tmux, piCorralCli, piSyncCli],
+            currentUID: 501,
+            physicalMemory: 16 << 30
+        )
+        XCTAssertTrue(rows.contains { $0.displayName == "pi (Corral/cli)" })
+        XCTAssertTrue(rows.contains { $0.displayName == "pi (AgentSync/cli)" })
+    }
+
+    func testCursorAgentRowCarriesWorkspace() {
+        let tmux = makeProcess(pid: 510, path: "/opt/homebrew/bin/tmux", arguments: ["tmux"])
+        let agent = makeProcess(
+            pid: 511,
+            ppid: 510,
+            path: "/Users/me/.local/share/cursor-agent/agent",
+            arguments: ["agent", "--workspace", "a"],
+            workingDirectory: "/Users/me/Codes/NeatMark"
+        )
+        let rows = DisplayClassifier.rows(from: [tmux, agent], currentUID: 501, physicalMemory: 16 << 30)
+        XCTAssertEqual(rows.first { $0.kind == .cursorAgent }?.displayName, "Cursor Agent (NeatMark)")
+    }
+
+    func testKernelTaskRowIsReadOnlyAndNeverBulkEnded() {
+        let kernel = RawProcess(
+            identity: ProcessIdentity(pid: 0, startTime: 0),
+            ppid: 0,
+            uid: 0,
+            path: "kernel_task",
+            arguments: [],
+            responsiblePID: 0,
+            cpuPercent: 62.5,
+            memoryBytes: 0
+        )
+        let rows = DisplayClassifier.rows(from: [kernel], currentUID: 501, physicalMemory: 16 << 30)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.displayName, "kernel_task")
+        XCTAssertEqual(rows.first?.cpuPercent ?? 0, 62.5, accuracy: 0.0001)
+        XCTAssertTrue(rows.first?.isSystemProtected == true)
+        XCTAssertFalse(rows.first?.isCurrentUser == true)
+        XCTAssertFalse(rows.first?.canEnd == true)
+        XCTAssertTrue(ProcessTerminationSelection.bulkCandidates(from: rows, excludingPID: 999).isEmpty)
+    }
+
     func testPanelDismissKeepsStatusItem() {
         let panel = KitRect(x: 100, y: 100, width: 400, height: 400)
         let item = KitRect(x: 900, y: 880, width: 24, height: 22)
@@ -310,7 +459,9 @@ final class DisplayClassifierTests: XCTestCase {
         uid: uid_t = 501,
         path: String,
         arguments: [String],
-        responsible: pid_t? = nil
+        responsible: pid_t? = nil,
+        workingDirectory: String? = nil,
+        cpuPercent: Double = 1
     ) -> RawProcess {
         RawProcess(
             identity: ProcessIdentity(pid: pid, startTime: 1),
@@ -319,8 +470,9 @@ final class DisplayClassifierTests: XCTestCase {
             path: path,
             arguments: arguments,
             responsiblePID: responsible ?? pid,
-            cpuPercent: 1,
-            memoryBytes: 10_000_000
+            cpuPercent: cpuPercent,
+            memoryBytes: 10_000_000,
+            workingDirectory: workingDirectory
         )
     }
 }

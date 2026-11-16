@@ -1,45 +1,55 @@
 import Darwin
 import Foundation
 
-/// Long-lived `nettop` stream over a PTY — same pattern as mac-stats.
-/// One child emits CSV about once per second; avoids spawn-per-sample CPU cost.
+/// Long-lived `nettop` stream over a PTY with fast initial cumulative diffing.
 ///
 /// On current macOS, `-J bytes_in,bytes_out` yields:
 ///   `,bytes_in,bytes_out,`
 ///   `name.pid,bytes_in,bytes_out,`
-/// (no `time` column). First `-d` frame is a baseline; real rates start on the second.
+/// (no `time` column). Running cumulative counters (without `-d`) lets us flush each
+/// burst as soon as the line boundary settles (~25ms) instead of waiting for the next
+/// second's header, and pair the initial baseline (~22ms) with one fast `-L 1` probe
+/// (~200ms later) so opening the network table produces live rates in ~250ms.
 nonisolated final class NettopStreamSampler: @unchecked Sendable {
     static let executablePath = "/usr/bin/nettop"
-    /// `-d` = per-interval deltas; `-L 0` = stream forever; PTY required (Pipe buffers forever).
+    /// Cumulative per-process stream over PTY (Pipe block-buffers ~4KB without a TTY).
     static let arguments = [
-        "-d", "-P", "-L", "0", "-s", "1", "-x", "-n",
+        "-P", "-L", "0", "-s", "1", "-x", "-n",
+        "-J", "bytes_in,bytes_out"
+    ]
+    static let singleShotArguments = [
+        "-P", "-L", "1", "-x", "-n",
         "-J", "bytes_in,bytes_out"
     ]
 
     private let lock = NSLock()
+    private let flushQueue = DispatchQueue(label: "top.caozc.MacResourceMonitor.nettop-flush")
+    private let probeQueue = DispatchQueue(label: "top.caozc.MacResourceMonitor.nettop-probe", qos: .userInitiated)
+    private var generation: UInt64 = 0
     private var task: Process?
+    private var probeTask: Process?
     private var masterHandle: FileHandle?
     /// Keep the slave end alive for the Process lifetime (shared stdin/stdout).
     private var slaveHandle: FileHandle?
+    private var pendingFlushWorkItem: DispatchWorkItem?
     private var buffer = [UInt8]()
     private var bufferHead = 0
+    private var currentCounters: [pid_t: (received: UInt64, sent: UInt64)] = [:]
+    private var baselineCounters: [pid_t: (received: UInt64, sent: UInt64)]?
+    private var baselineTimestamp: ContinuousClock.Instant?
     private var latestRates: [pid_t: ProcessNetworkRate] = [:]
-    private var currentFrame: [pid_t: ProcessNetworkRate] = [:]
     private var headersSeen = 0
+    private var currentFrameOpen = false
     private var hasPublishedFrame = false
+    private var publishedSequence: UInt64 = 0
+    private var probeScheduled = false
+    private var frameWaiters: [UUID: (minSequence: UInt64, callback: @Sendable () -> Void)] = [:]
 
     deinit {
         stop()
     }
 
     func start() {
-        lock.lock()
-        let alreadyRunning = task != nil
-        lock.unlock()
-        guard alreadyRunning == false else { return }
-
-        Self.reapOrphanedSamplers()
-
         lock.lock()
         defer { lock.unlock() }
         guard task == nil else { return }
@@ -66,15 +76,24 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
 
         do {
             try process.run()
+            generation &+= 1
             self.task = process
+            self.probeTask = nil
             self.masterHandle = masterHandle
             self.slaveHandle = slaveHandle
+            pendingFlushWorkItem?.cancel()
+            pendingFlushWorkItem = nil
             buffer.removeAll(keepingCapacity: true)
             bufferHead = 0
+            currentCounters.removeAll(keepingCapacity: true)
+            baselineCounters = nil
+            baselineTimestamp = nil
             latestRates = [:]
-            currentFrame = [:]
             headersSeen = 0
+            currentFrameOpen = false
             hasPublishedFrame = false
+            publishedSequence = 0
+            probeScheduled = false
         } catch {
             masterHandle.readabilityHandler = nil
             try? masterHandle.close()
@@ -84,20 +103,36 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
 
     func stop() {
         lock.lock()
+        generation &+= 1
+        pendingFlushWorkItem?.cancel()
+        pendingFlushWorkItem = nil
         masterHandle?.readabilityHandler = nil
         let dyingTask = task
+        let dyingProbeTask = probeTask
         let dyingMaster = masterHandle
         let dyingSlave = slaveHandle
+        let waiters = frameWaiters.values.map(\.callback)
+        frameWaiters.removeAll(keepingCapacity: true)
         task = nil
+        probeTask = nil
         masterHandle = nil
         slaveHandle = nil
+        currentCounters.removeAll(keepingCapacity: true)
+        baselineCounters = nil
+        baselineTimestamp = nil
         latestRates = [:]
-        currentFrame = [:]
         headersSeen = 0
+        currentFrameOpen = false
         hasPublishedFrame = false
+        publishedSequence = 0
+        probeScheduled = false
         buffer.removeAll(keepingCapacity: true)
         bufferHead = 0
         lock.unlock()
+
+        for waiter in waiters {
+            waiter()
+        }
 
         // Tear down handles AFTER releasing the lock: closeFile() can flush a
         // final readabilityHandler callback that re-enters handleChunk → NSLock
@@ -109,6 +144,11 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         try? dyingMaster?.close()
         try? dyingSlave?.close()
 
+        Self.terminateAndReap(dyingProbeTask)
+        Self.terminateAndReap(dyingTask)
+    }
+
+    private static func terminateAndReap(_ dyingTask: Process?) {
         guard let dyingTask else { return }
         let pid = dyingTask.processIdentifier
         dyingTask.terminate()
@@ -160,16 +200,15 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         } else {
             flags = arguments
         }
-        if flags == Self.arguments { return true }
+        if flags == Self.arguments || flags == Self.singleShotArguments { return true }
         // Verified 2026-10-07: nettop rewrites its own argv at runtime — a sampler
         // launched with `-J bytes_in,bytes_out` reads back from the kernel as
-        // `-J bytes_in`. Exact-equality above therefore never matches a live
-        // sampler, so orphan reaping and monitor-row folding silently did nothing.
-        // Match the streamer family instead: per-process delta mode (`-d -P -L`)
-        // with a `-J` column list containing network byte counters.
+        // `-J bytes_in`. Match both legacy `-d` streams and current cumulative `-L 0` /
+        // `-L 1` samplers carrying `-P -L -x -n -J bytes_in...`.
         // Caller only kills orphans / foreign monitor children of the same UID,
         // so a user's own foreground nettop is never matched here for killing.
-        guard flags.contains("-d"), flags.contains("-P"), flags.contains("-L"),
+        guard flags.contains("-P"), flags.contains("-L"),
+              flags.contains("-x"), flags.contains("-n"),
               flags.contains("-J"),
               let jIndex = flags.firstIndex(of: "-J"), jIndex + 1 < flags.count
         else { return false }
@@ -203,10 +242,14 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         return (info.kp_eproc.e_ppid, info.kp_eproc.e_ucred.cr_uid)
     }
 
-    func latestRatesSnapshot() -> [pid_t: ProcessNetworkRate] {
+    func latestSampleSnapshot() -> (hasFrame: Bool, sequence: UInt64, rates: [pid_t: ProcessNetworkRate]) {
         lock.lock()
         defer { lock.unlock() }
-        return latestRates
+        return (hasPublishedFrame, publishedSequence, latestRates)
+    }
+
+    func latestRatesSnapshot() -> [pid_t: ProcessNetworkRate] {
+        latestSampleSnapshot().rates
     }
 
     var hasFrame: Bool {
@@ -215,14 +258,81 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         return hasPublishedFrame
     }
 
+    func waitForFirstFrame(timeoutSeconds: Double = 1.5) async {
+        await waitForNextFrame(after: 0, timeoutSeconds: timeoutSeconds)
+    }
+
+    func waitForNextFrame(after sequence: UInt64, timeoutSeconds: Double = 1.25) async {
+        guard !Task.isCancelled else { return }
+        start()
+        let waiterID = UUID()
+        final class ResumeOnce: @unchecked Sendable {
+            private let lock = NSLock()
+            private var continuation: CheckedContinuation<Void, Never>?
+            init(_ continuation: CheckedContinuation<Void, Never>) {
+                self.continuation = continuation
+            }
+            func resume() {
+                lock.lock()
+                let pending = continuation
+                continuation = nil
+                lock.unlock()
+                pending?.resume()
+            }
+        }
+
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let box = ResumeOnce(continuation)
+                lock.lock()
+                if Task.isCancelled || publishedSequence > sequence || task == nil {
+                    lock.unlock()
+                    box.resume()
+                    return
+                }
+                frameWaiters[waiterID] = (
+                    minSequence: sequence + 1,
+                    callback: { [weak self] in
+                        self?.removeWaiter(id: waiterID)
+                        box.resume()
+                    }
+                )
+                lock.unlock()
+
+                flushQueue.asyncAfter(deadline: .now() + timeoutSeconds) { [weak self] in
+                    self?.removeWaiter(id: waiterID)
+                    box.resume()
+                }
+            }
+        } onCancel: { [weak self] in
+            let callback = self?.removeWaiter(id: waiterID)
+            callback?()
+        }
+    }
+
+    @discardableResult
+    private func removeWaiter(id: UUID) -> (@Sendable () -> Void)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return frameWaiters.removeValue(forKey: id)?.callback
+    }
+
     // Internal for testing: regression test feeds synthetic chunks concurrently
     // with stop()/start() to prove the buffer is lock-protected.
     func handleChunk(_ chunk: Data) {
+        var callbacksToInvoke: [@Sendable () -> Void] = []
+        var probeGenToSchedule: UInt64?
+
         lock.lock()
-        defer { lock.unlock() }
         // stop() sets task=nil under the same lock; drop late chunks after stop
         // instead of appending to a cleared buffer (ex-index-out-of-range crash).
-        guard task != nil else { return }
+        guard task != nil else {
+            lock.unlock()
+            return
+        }
+        pendingFlushWorkItem?.cancel()
+        pendingFlushWorkItem = nil
+
         chunk.withUnsafeBytes { raw in
             guard let base = raw.baseAddress, raw.count > 0 else { return }
             let bytes = UnsafeBufferPointer(
@@ -232,12 +342,19 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
             buffer.append(contentsOf: bytes)
         }
 
+        let now = ContinuousClock.now
         let count = buffer.count
         var lineStart = bufferHead
         var index = bufferHead
         while index < count {
             if buffer[index] == 0x0A {
-                handleLineLocked(start: lineStart, end: index)
+                let outcome = handleLineLocked(start: lineStart, end: index, now: now)
+                if !outcome.waiters.isEmpty {
+                    callbacksToInvoke.append(contentsOf: outcome.waiters)
+                }
+                if let gen = outcome.scheduleProbeGeneration {
+                    probeGenToSchedule = gen
+                }
                 lineStart = index + 1
             }
             index += 1
@@ -248,37 +365,247 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
             buffer.removeFirst(bufferHead)
             bufferHead = 0
         }
+
+        if currentFrameOpen, bufferHead == buffer.count {
+            let expectedGeneration = generation
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.flushOpenFrameIfSettled(expectedGeneration: expectedGeneration)
+            }
+            pendingFlushWorkItem = workItem
+            flushQueue.asyncAfter(deadline: .now() + .milliseconds(25), execute: workItem)
+        }
+        lock.unlock()
+
+        for callback in callbacksToInvoke {
+            callback()
+        }
+        if let gen = probeGenToSchedule {
+            scheduleInitialProbe(for: gen)
+        }
+    }
+
+    private func flushOpenFrameIfSettled(expectedGeneration: UInt64) {
+        var callbacksToInvoke: [@Sendable () -> Void] = []
+        var probeGenToSchedule: UInt64?
+
+        lock.lock()
+        guard task != nil,
+              generation == expectedGeneration,
+              currentFrameOpen,
+              bufferHead == buffer.count
+        else {
+            lock.unlock()
+            return
+        }
+        let outcome = commitCurrentFrameLocked(at: ContinuousClock.now)
+        callbacksToInvoke = outcome.waiters
+        probeGenToSchedule = outcome.scheduleProbeGeneration
+        lock.unlock()
+
+        for callback in callbacksToInvoke {
+            callback()
+        }
+        if let gen = probeGenToSchedule {
+            scheduleInitialProbe(for: gen)
+        }
     }
 
     /// Must be called with `lock` held (see handleChunk). Split out so the whole
     /// chunk — append, split, parse, publish — is atomic vs stop()/start().
-    /// Previously handleChunk touched `buffer` without the lock while stop()
-    /// cleared it on another thread: `buffer[index]` then trapped Index out of
-    /// range on the NSFileHandle.fd_monitoring queue (2026-09-13 闪退).
-    private func handleLineLocked(start: Int, end: Int) {
+    private func handleLineLocked(
+        start: Int,
+        end: Int,
+        now: ContinuousClock.Instant
+    ) -> (waiters: [@Sendable () -> Void], scheduleProbeGeneration: UInt64?) {
         var realEnd = end
         if realEnd > start, buffer[realEnd - 1] == 0x0D { realEnd -= 1 }
-        guard realEnd > start else { return }
+        guard realEnd > start else { return ([], nil) }
 
         if Self.isHeaderLine(buffer, start: start, end: realEnd) {
-            // First completed body is the `-d` baseline; publish from the second body onward.
-            if headersSeen >= 2 {
-                latestRates = currentFrame
-                hasPublishedFrame = true
+            var outcome: (waiters: [@Sendable () -> Void], scheduleProbeGeneration: UInt64?) = ([], nil)
+            if currentFrameOpen {
+                outcome = commitCurrentFrameLocked(at: now)
             }
-            currentFrame = [:]
+            currentCounters.removeAll(keepingCapacity: true)
+            currentFrameOpen = true
             headersSeen += 1
+            return outcome
+        }
+
+        guard headersSeen >= 1, currentFrameOpen else { return ([], nil) }
+        guard let parsed = Self.parseDeltaLine(buffer, start: start, end: realEnd) else {
+            return ([], nil)
+        }
+        currentCounters[parsed.pid] = (parsed.received, parsed.sent)
+        return ([], nil)
+    }
+
+    private func commitCurrentFrameLocked(
+        at now: ContinuousClock.Instant
+    ) -> (waiters: [@Sendable () -> Void], scheduleProbeGeneration: UInt64?) {
+        currentFrameOpen = false
+        return applyCumulativeSnapshotLocked(currentCounters, at: now)
+    }
+
+    private func applyCumulativeSnapshotLocked(
+        _ snapshot: [pid_t: (received: UInt64, sent: UInt64)],
+        at now: ContinuousClock.Instant,
+        overrideElapsedSeconds: Double? = nil
+    ) -> (waiters: [@Sendable () -> Void], scheduleProbeGeneration: UInt64?) {
+        guard let previous = baselineCounters, let previousTime = baselineTimestamp else {
+            baselineCounters = snapshot
+            baselineTimestamp = now
+            if !hasPublishedFrame, !probeScheduled {
+                probeScheduled = true
+                return ([], generation)
+            }
+            return ([], nil)
+        }
+
+        let elapsed = overrideElapsedSeconds ?? Self.seconds(from: previousTime, to: now)
+        let safeElapsed = max(elapsed, 0.05)
+        var nextRates: [pid_t: ProcessNetworkRate] = [:]
+        for (pid, current) in snapshot {
+            let prior = previous[pid] ?? (received: 0, sent: 0)
+            let deltaIn = current.received >= prior.received ? current.received - prior.received : 0
+            let deltaOut = current.sent >= prior.sent ? current.sent - prior.sent : 0
+            guard deltaIn > 0 || deltaOut > 0 else { continue }
+            nextRates[pid] = ProcessNetworkRate(
+                receivedBytesPerSecond: Double(deltaIn) / safeElapsed,
+                sentBytesPerSecond: Double(deltaOut) / safeElapsed
+            )
+        }
+
+        baselineCounters = snapshot
+        baselineTimestamp = now
+        latestRates = nextRates
+        hasPublishedFrame = true
+        publishedSequence &+= 1
+        let currentSequence = publishedSequence
+        var readyCallbacks: [@Sendable () -> Void] = []
+        for (id, entry) in frameWaiters where currentSequence >= entry.minSequence {
+            readyCallbacks.append(entry.callback)
+            frameWaiters.removeValue(forKey: id)
+        }
+        return (readyCallbacks, nil)
+    }
+
+    private func scheduleInitialProbe(for expectedGeneration: UInt64) {
+        probeQueue.asyncAfter(deadline: .now() + .milliseconds(200)) { [weak self] in
+            self?.runInitialProbe(expectedGeneration: expectedGeneration)
+        }
+    }
+
+    private func runInitialProbe(expectedGeneration: UInt64) {
+        lock.lock()
+        let active = task != nil && generation == expectedGeneration && !hasPublishedFrame
+        lock.unlock()
+        guard active else { return }
+
+        var master: Int32 = -1
+        var slave: Int32 = -1
+        guard openpty(&master, &slave, nil, nil, nil) == 0 else { return }
+
+        let masterHandle = FileHandle(fileDescriptor: master, closeOnDealloc: true)
+        let slaveHandle = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: Self.executablePath)
+        process.arguments = Self.singleShotArguments
+        process.standardInput = slaveHandle
+        process.standardOutput = slaveHandle
+        process.standardError = FileHandle.nullDevice
+
+        lock.lock()
+        guard task != nil, generation == expectedGeneration, !hasPublishedFrame else {
+            lock.unlock()
+            try? masterHandle.close()
+            try? slaveHandle.close()
+            return
+        }
+        probeTask = process
+        lock.unlock()
+
+        do {
+            try process.run()
+        } catch {
+            lock.lock()
+            if probeTask === process { probeTask = nil }
+            lock.unlock()
+            try? masterHandle.close()
+            try? slaveHandle.close()
             return
         }
 
-        guard headersSeen >= 1 else { return }
-        guard let parsed = Self.parseDeltaLine(buffer, start: start, end: realEnd) else { return }
-        guard parsed.received > 0 || parsed.sent > 0 else { return }
+        // Keep slaveHandle open until nettop exits and master buffer is drained;
+        // closing the slave PTY early on Darwin revokes unread master output with EIO.
+        var output = Data()
+        var scratch = [UInt8](repeating: 0, count: 16_384)
+        var pfd = pollfd(fd: master, events: Int16(POLLIN), revents: 0)
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(600))
+        while ContinuousClock.now < deadline {
+            let ready = Darwin.poll(&pfd, 1, 15)
+            if ready > 0, (pfd.revents & Int16(POLLIN)) != 0 {
+                let count = Darwin.read(master, &scratch, scratch.count)
+                if count > 0 {
+                    output.append(scratch, count: count)
+                } else {
+                    break
+                }
+            } else if !process.isRunning {
+                // Process exited and no POLLIN left in kernel PTY queue.
+                break
+            }
+        }
+        process.waitUntilExit()
+        while Darwin.poll(&pfd, 1, 0) > 0, (pfd.revents & Int16(POLLIN)) != 0 {
+            let count = Darwin.read(master, &scratch, scratch.count)
+            if count > 0 {
+                output.append(scratch, count: count)
+            } else {
+                break
+            }
+        }
+        try? slaveHandle.close()
+        try? masterHandle.close()
 
-        currentFrame[parsed.pid] = ProcessNetworkRate(
-            receivedBytesPerSecond: Double(parsed.received),
-            sentBytesPerSecond: Double(parsed.sent)
-        )
+        let text = String(decoding: output, as: UTF8.self)
+        let counters = Self.parseCounters(text)
+        guard !counters.isEmpty else { return }
+
+        var callbacks: [@Sendable () -> Void] = []
+        lock.lock()
+        if probeTask === process { probeTask = nil }
+        if task != nil, generation == expectedGeneration, !hasPublishedFrame {
+            callbacks = applyCumulativeSnapshotLocked(counters, at: ContinuousClock.now).waiters
+        }
+        lock.unlock()
+
+        for callback in callbacks {
+            callback()
+        }
+    }
+
+    private static func seconds(from start: ContinuousClock.Instant, to end: ContinuousClock.Instant) -> Double {
+        let duration = start.duration(to: end)
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+    }
+
+    /// Deterministic test hook for cumulative diffing without spawning `/usr/bin/nettop`.
+    func ingestSnapshotForTesting(
+        _ counters: [pid_t: (received: UInt64, sent: UInt64)],
+        elapsedSeconds: Double
+    ) {
+        lock.lock()
+        let callbacks = applyCumulativeSnapshotLocked(
+            counters,
+            at: ContinuousClock.now,
+            overrideElapsedSeconds: elapsedSeconds
+        ).waiters
+        lock.unlock()
+        for callback in callbacks {
+            callback()
+        }
     }
 
     /// Header is `,bytes_in,bytes_out,` (current `-J`) or legacy `time,...bytes_in...`.
@@ -384,6 +711,18 @@ nonisolated final class NettopStreamSampler: @unchecked Sendable {
         else { return nil }
 
         return ParsedDelta(pid: pid, received: received, sent: sent)
+    }
+
+    /// Parse a multi-line CSV snapshot into cumulative per-PID byte counters.
+    nonisolated static func parseCounters(_ output: String) -> [pid_t: (received: UInt64, sent: UInt64)] {
+        var counters: [pid_t: (received: UInt64, sent: UInt64)] = [:]
+        for line in output.split(whereSeparator: \.isNewline) {
+            let trimmed = String(line)
+            if isHeader(trimmed) { continue }
+            guard let parsed = parseLine(trimmed) else { continue }
+            counters[parsed.pid] = (parsed.received, parsed.sent)
+        }
+        return counters
     }
 
     /// Parse a single CSV line from a UTF-8 string (tests / diagnostics).

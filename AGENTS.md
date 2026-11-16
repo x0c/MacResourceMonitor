@@ -96,10 +96,10 @@ Remote：`app-macos` → GitHub 公开 [`x0c/MacResourceMonitor`](https://github
 - **浮层形态 1**：点外关；列表实底；表锚在图标正下方。图标坐标假（宽高 0 / 不在菜单栏带）→ 禁止用假位置，等一拍再开。底边可拖改高度并记住；最高夹在可见屏下沿内；只记高度，不把表变成会记位置的桌面窗口。
 - **冻结开关**（Freeze / 冻结，默认关）稳住名单顺序与成员，数字仍刷；双环与表头汇总继续刷。点列头排序自动关冻结。CPU/内存表收起不刷可见名单；网络表保留最近一帧、收起后停止高耗按进程采样，禁止加载屏。不要在 `ProcessTableView` 创建即开刷。
 - **结束符号悬停钉行**；钉死只针对结束符号。
-- **表头**：`CPU 88.8%` / `Mem 68.8%`；点列仅从高到低；CPU 行加总上限 100%；内存读系统级物理占用，禁止行相加。
-- **平表**：禁止进程树。同一桌面应用下助手折进该行；Cursor.app 对外部命令按终端处理。
-- **人话名**：优先启动参数；`dlsym("responsibility_get_pid_responsible_for_pid")`，失败退包路径。参数按 pid+启动时刻缓存。
-- **CPU**：Δ(user+system)/(墙钟秒×逻辑核)×100，上限 100%。Apple Silicon 须乘 timebase。
+- **表头**：`CPU 88.8%` / `Mem 68.8%`；点列仅从高到低；CPU 读系统级 `HOST_CPU_LOAD_INFO` 短窗平滑动均值（禁止用行相加），内存读系统级物理占用，禁止行相加。
+- **平表**：禁止进程树。同一桌面应用下助手折进该行；`pi` / `Cursor Agent` 拉起的构建与单测折进该助手行；Cursor.app 对外部命令按终端处理。
+- **人话名**：优先启动参数；`dlsym("responsibility_get_pid_responsible_for_pid")`，失败退包路径。参数按 pid+启动时刻缓存。`pi` / `Cursor Agent` 带工作区后缀（从宿主成员取 cwd，通用子目录保留 `父/子`）；Corral 拆成 `Corral` / `Corral TUI` / `Corral Remote`，禁止吸进 `tmux` 或路径碰瓷的进程。
+- **CPU**：行 CPU 是 Δ(user+system)/(单调墙钟秒×逻辑核)×100，上限 100%；Apple Silicon 须乘 timebase。跨用户进程只在表打开期间用 `/bin/ps` 累计秒差分；`kernel_task` 用整机余量且上限受系统态余量约束成只读行。
 - **内存**：物理占用账本/物理内存×100，不要 resident。
 - **CPU 外环**：无效样本保留上一帧；真实 0% 仍空环。
 - **结束**：单行与表头批量都直接 SIGKILL；表头 `×` 必须二次确认并排除本应用。只结束当前用户；系统进程禁止一键杀；每次发信号前仍按 PID+启动时刻与路径复核身份。WindowServer 等 argv0=短名禁止当具名工具放开。

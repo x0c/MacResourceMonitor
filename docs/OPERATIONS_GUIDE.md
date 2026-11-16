@@ -78,3 +78,104 @@ The primary inspected all four actual Debug Settings windows: English/Chinese in
 Universal Release 1.1.7 (43), built from `aa13e01390c17e0708389fb7540f736ac58d4a40`, passed archive/export and individual Developer ID, timestamp, hardened-runtime and debug-entitlement checks, including the embedded `mrm`. The archive's only warning is the assessed App Intents tooling notice. The final stapled app was installed and both English/Chinese light Settings inspected again at 480 × 234. Its CLI returns `mrm 1.1.7 (43)`; strict signature and stapled-ticket validation pass. Release dark remains represented by the Debug evidence, not a claimed installed-dark pass.
 
 The public [1.1.7 release](https://github.com/x0c/MacResourceMonitor/releases/tag/v1.1.7) contains both notarized DMG and signed update ZIP. Complete anonymous downloads match the local artifacts (DMG SHA256 `e35d59ba83e92c17a5a1789a663a7d715ec883ee1a0789975620a458311a8f64`, ZIP `012b74d95fde26e0e5fe24d1fddc5eac7f99d18973bfa4346c40d79c22945d3d`). The live signed feed serves build 43 and Homebrew cask 1.1.7 matches that DMG. Upload returned HTTP 422 / `ReleaseAsset.name already exists` even though both assets had completed; recovery verified the public bytes before continuing the cask/feed checks, without rebuilding or resubmitting notarization. Detached receipt: `build/settings-release-1.1.7/receipt-post-upload.json`.
+
+## Local CPU optimization acceptance (2026-11-12)
+
+Source `a3fea3a` passed all 91 native Debug tests and the arm64/x86_64 Release
+archive/export. All seven exported Mach-O components have the existing Developer
+ID team, a secure timestamp and hardened runtime; installed strict signature
+verification passes. The only build warning is the assessed App Intents tooling
+notice above. This local source build retains version 1.1.7 (43); identify it by
+the source commit and executable hashes in the private receipt, not version alone.
+
+Fresh installed CPU-table captures show changing readings and membership. Fresh
+network-table captures show changing nonzero rates; reopening retains a populated
+table, and explicit collapse stops its nettop child within two seconds. More than
+60 seconds after collapse there is no nettop process. Acceptance did not exercise
+row/bulk termination or change preferences.
+
+Thirty-second unsampled process-time observations measured 13.73% of one core in
+the previous hidden app, 6.67% in the new hidden app, and 15.45% with its CPU table
+open. Concurrent system activity changed, so these are field observations, not a
+controlled whole-process reduction. A separate 45,000-construction URL probe
+measured 0.1433 s CPU with implicit directory detection versus 0.0414 s with the
+explicit file type. This is one operation's cost, not total application CPU.
+
+Full logs, installed executable hashes and original-size captures are retained
+privately at `~/.config/top.caozc.MacResourceMonitor/development/cpu-20261112/`.
+The previous signed application is retained there as `previous-installed.app` for
+rollback. The install uses `build/CPUExport/Mac Resource Monitor.app`, an Xcode
+Developer ID export from `build/CPUOptimization.xcarchive` with the same export
+options as the release procedure. It is a local signed build; public release
+assets and the update feed retain the previously published artifact.
+
+## Local background CPU & network-table latency acceptance (2026-11-15)
+
+Source `23f8c5b` passed all 97 native Debug tests (`testFirstLiveNetworkFrameArrivesSubSecond`
+in 0.407 s) and the universal `arm64`/`x86_64` Release archive/export (`build/Export/Mac Resource Monitor.app`).
+Strict signature, Developer ID team, secure timestamp, hardened runtime, and
+debug-entitlement checks passed across the app bundle and all five nested Mach-O
+components (`Mac Resource Monitor` SHA256 `d92b0a8f93d7f62f81a9d5c494a0a42deef2dc0333522dffb3bd492783b9dea8`,
+`mrm` SHA256 `2185df68bec62e1dddc237b34b8c0cd7382bacda6f788baedff0b2c3735f970e`).
+The only build warning is the assessed App Intents tooling notice above.
+
+Installed `mrm version` returns `mrm 1.1.7 (43)` and `mrm doctor` completes across
+782 PIDs in 26 ms; no Settings or recovery window opened on launch. Unsampled
+hidden-process CPU dropped from 6.35% of one core (108.35 s / 1705 s pre-fix) to
+3.795% over 59.72 s immediately post-launch on a three-display setup (`OF27UT Pro`,
+`Color LCD`, `Sidecar Display`) during active multi-MB/s background traffic (`ps`
+settling around 1.1%–2.5%). Five-second stack sampling confirmed `__proc_info` leaf
+samples fell from 89 to 7 and hidden `ProcessTableView` SwiftUI layout samples fell
+from 25 to 0; remaining active samples sit in AppKit's three-display
+`-[NSStatusItem _updateReplicantsUnlessMenuIsTracking:]` when live network text changes.
+
+Noninterfering `AXPress` verification confirmed sequential live updates on the CPU
+table (`17.8%` → `18.1%`), populated live per-process rates (including root daemons
+`mihomo` and `zerotier-one`) on a cold Network table open within 465 ms with no
+loading screen, continued 1 s streaming updates (`network-panel-1500ms.png`), and
+`nettop` child termination within 500 ms of collapse. Logs, rollback bundle
+(`previous-installed.app`) and unresized captures are retained privately at
+`~/.config/top.caozc.MacResourceMonitor/development/cpu-20261115/`.
+
+## Local whole-machine CPU visibility acceptance (2026-11-16)
+
+The whole-machine CPU header, cross-UID sampling, `kernel_task` remainder row,
+Corral splitting and `pi (<workspace>)` rows passed all 107 native Debug tests and
+the universal `arm64`/`x86_64` Release archive/export (`build/Export/Mac Resource Monitor.app`).
+The only build warning is the assessed App Intents tooling notice. Strict signature
+verification passes on the installed bundle; the installed app binary SHA256
+`3dbdc86bc3ef283d6166dcb39dbb2596f8643b5042402d28651dc1b18c5698df` and `mrm`
+SHA256 `02ab7665cf9a49a726b6963f8a6d7858830acfb27c889db2e5e6e45f23adcb8a`
+match the export.
+
+Installed 1.1.7 (43) from this tree, dark CPU-panel captures: one frame read
+`CPU 100.0%` while `top -l 2` reported 0% idle (72.80% user + 27.19% sys) on the
+same build; another read `CPU 40.0%` against 42.3% busy sampled two seconds later.
+Frames show `kernel_task`, `WindowServer`, `spindump`, `sysmond` and `coreaudiod` as
+locked system rows, `Corral`, `Corral TUI`, `Corral Remote`, `tmux`, `pi (NeatMark)`
+and `pi (MacResourceMonitor)` as separate rows, and numbers differed between
+successive captures. While the CPU table was open the app spawned `/bin/ps` three
+times in a three-second poll at 26 ms per run on ~770 processes; with both tables
+closed it spawned none in three seconds and used 0.37 s CPU over 12 s (3.1% of one
+core). An earlier eight-second sample on this source used 11% of one core with the
+CPU table open; a repeat on the final build was lost because another process closed
+the panel mid-measurement.
+
+Row/bulk termination, hover pinning and the network table were not exercised again;
+their code paths are unchanged. Captures, logs and the export are retained privately
+at `~/.config/top.caozc.MacResourceMonitor/development/cpu-20261116/`.
+
+Follow-up refinement on this tree (2026-11-16): added a 3-sample (~2–3 s) rolling
+`HOST_CPU_LOAD_INFO` window for header/ring stability, aligned `hostLoad` and
+same-UID `PROC_PIDTASKINFO` after `/bin/ps` on monotonic `systemUptime`, capped
+`kernel_task` at the unattributed system-space ceiling (`hostSystem - ownedSystem`),
+preserved `pi` / `Cursor Agent` workspace labels from session-owner members when a
+folded child leads CPU, and disambiguated generic subdirectory leaves (`Corral/cli`).
+All 110 native Debug tests pass (zero Swift warnings; only the assessed App Intents
+tooling notice). Universal Release `arm64`/`x86_64` archive/export (`Mac Resource Monitor`
+SHA256 `a94c209542bcd440170edcbd4355afa0bc0e009c7e2241d22be833e74e26b2c7`, `mrm`
+SHA256 `70672112b5282007ab34761ed08e7b0b56098bf5860354057044fb8d3aac6983`) passed strict
+Developer ID signature verification and was overwrite-installed. Live panel captures
+showed `CPU 52.0%` → `47.3%` with `kernel_task` (`6.2%`), `WindowServer` (`4.8%`),
+`Corral`, `Corral Remote`, `pi (NeatMark)`, `pi (Codes)` and `Mac Resource Monitor`;
+relaunching with panels closed recorded 0 `ps` spawns over 2 s.

@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable private var launchAtLogin = LaunchAtLoginManager.shared
     @Bindable private var displayPreferences = MenuBarDisplayPreferences.shared
+    @Bindable private var whitelist = WhitelistStore.shared
     @State private var contentHeight: CGFloat = 220
 
     var body: some View {
@@ -32,6 +33,37 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            Section {
+                if whitelist.entries.isEmpty {
+                    Text(String(localized: "settings.whitelist.empty"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(whitelist.entries, id: \.self) { entry in
+                        HStack(spacing: 8) {
+                            Image(nsImage: whitelistIcon(for: entry))
+                                .resizable()
+                                .frame(width: 16, height: 16)
+                                .accessibilityHidden(true)
+                            Text(verbatim: entry.displayName)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Button(String(localized: "settings.whitelist.remove")) {
+                                whitelist.remove(entry: entry)
+                            }
+                            .buttonStyle(.link)
+                        }
+                    }
+                }
+            } header: {
+                Text(String(localized: "settings.whitelist"))
+            } footer: {
+                Text(String(localized: "settings.whitelist.footer"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section { appIdentity }
         }
@@ -75,5 +107,13 @@ struct SettingsView: View {
 
     private var launchBinding: Binding<Bool> {
         Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) })
+    }
+
+    /// 和列表行取同一张图；路径失效的老条目回退到通用图标，不影响保护。
+    private func whitelistIcon(for entry: WhitelistedApp) -> NSImage {
+        if let path = entry.displayIconPath, !path.isEmpty {
+            return NSWorkspace.shared.icon(forFile: path)
+        }
+        return NSWorkspace.shared.icon(for: .unixExecutable)
     }
 }

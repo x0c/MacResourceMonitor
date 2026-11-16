@@ -31,6 +31,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var memoryPercent = 0.0
     private var uploadBytesPerSecond: Double?
     private var downloadBytesPerSecond: Double?
+    private var lastRenderedRingKey: MenuBarIconRenderer.RingRenderKey?
+    private var lastRenderedNetworkKey: MenuBarIconRenderer.NetworkRenderKey?
+    private(set) var ringRenderCount = 0
+    private(set) var networkRenderCount = 0
 
     private lazy var launchAtLoginItem = NSMenuItem(
         title: String(localized: "menu.launchAtLogin"),
@@ -89,6 +93,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    func invalidate() {
+        displayPreferences.onChange = nil
+        if let ringStatusItem {
+            NSStatusBar.system.removeStatusItem(ringStatusItem)
+            self.ringStatusItem = nil
+        }
+        if let networkStatusItem {
+            NSStatusBar.system.removeStatusItem(networkStatusItem)
+            self.networkStatusItem = nil
+        }
+        activeStatusItem = nil
+    }
+
     func buttonScreenFrame() -> NSRect? {
         guard let item = activeStatusItem ?? ringStatusItem,
               let button = item.button,
@@ -122,8 +139,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         ringStatusItem.length = MenuBarIconRenderer.pointSize
         networkStatusItem.length = MenuBarIconRenderer.networkWidth
-        renderStatusItem()
+        lastRenderedRingKey = nil
+        lastRenderedNetworkKey = nil
         applyIconVisibility()
+        renderRingStatusItem(force: true)
+        renderNetworkStatusItem(force: true)
     }
 
     private func configureButton(_ button: NSStatusBarButton?, target: StatusItemPanelTarget) {
@@ -144,13 +164,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func updateMetrics(cpuPercent: Double, memoryPercent: Double) {
         self.cpuPercent = cpuPercent
         self.memoryPercent = memoryPercent
-        renderStatusItem()
+        renderRingStatusItem()
     }
 
     func updateNetworkSpeed(uploadBytesPerSecond: Double?, downloadBytesPerSecond: Double?) {
         self.uploadBytesPerSecond = uploadBytesPerSecond
         self.downloadBytesPerSecond = downloadBytesPerSecond
-        renderStatusItem()
+        renderNetworkStatusItem()
     }
 
     private func applyIconVisibility() {
@@ -268,7 +288,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
-    private func renderStatusItem() {
+    func renderRingStatusItem(force: Bool = false) {
+        let key = MenuBarIconRenderer.RingRenderKey(
+            cpuPercent: cpuPercent,
+            memoryPercent: memoryPercent,
+            scale: MenuBarIconRenderer.currentBackingScaleFactor
+        )
+        if !force, key == lastRenderedRingKey, ringStatusItem.button?.image != nil {
+            return
+        }
+        lastRenderedRingKey = key
+        ringRenderCount += 1
         applyTemplateImage(
             MenuBarIconRenderer.image(
                 cpuPercent: cpuPercent,
@@ -276,14 +306,31 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             ),
             to: ringStatusItem
         )
+    }
+
+    func renderNetworkStatusItem(force: Bool = false) {
+        let isVisible = displayPreferences.showsNetworkSpeed
+        if networkStatusItem.isVisible != isVisible {
+            networkStatusItem.isVisible = isVisible
+        }
+        guard isVisible else {
+            lastRenderedNetworkKey = nil
+            return
+        }
+        let key = MenuBarIconRenderer.NetworkRenderKey(
+            uploadBytesPerSecond: uploadBytesPerSecond,
+            downloadBytesPerSecond: downloadBytesPerSecond,
+            scale: MenuBarIconRenderer.currentBackingScaleFactor
+        )
+        if !force, key == lastRenderedNetworkKey, networkStatusItem.button?.image != nil {
+            return
+        }
+        lastRenderedNetworkKey = key
+        networkRenderCount += 1
         applyTemplateImage(
-            MenuBarIconRenderer.networkImage(
-                uploadBytesPerSecond: uploadBytesPerSecond,
-                downloadBytesPerSecond: downloadBytesPerSecond
-            ),
+            MenuBarIconRenderer.networkImage(for: key),
             to: networkStatusItem
         )
-        networkStatusItem.isVisible = displayPreferences.showsNetworkSpeed
     }
 
     private func applyTemplateImage(_ image: NSImage, to statusItem: NSStatusItem) {

@@ -125,7 +125,7 @@ nonisolated enum DisplayClassifier {
               parts[appIndex + 1] == "Contents",
               parts[appIndex + 2] == "MacOS" else { return false }
         let bundlePath = root + parts[...appIndex].joined(separator: "/")
-        guard let info = Bundle(url: URL(fileURLWithPath: bundlePath))?.infoDictionary,
+        guard let info = Bundle(url: URL(fileURLWithPath: bundlePath, isDirectory: true))?.infoDictionary,
               info["CFBundleExecutable"] as? String == String(parts[appIndex + 3]) else { return false }
         return !isPlistTrue(info["LSUIElement"]) && !isPlistTrue(info["LSBackgroundOnly"])
     }
@@ -168,7 +168,10 @@ nonisolated enum DisplayClassifier {
             return "pi:\(process.pid)"
         }
         if isCorral(process) {
-            return "corral"
+            return corralRowKey(process, byPID: byPID)
+        }
+        if let owner = agentOwner(of: process, byPID: byPID) {
+            return isPi(owner) ? "pi:\(owner.pid)" : "cursor-agent:\(owner.pid)"
         }
         if let hint = toolHint(path: process.path, arguments: process.arguments, executableName: process.executableName),
            isStandaloneNamedTool(process, hint: hint, byPID: byPID) {
@@ -190,7 +193,15 @@ nonisolated enum DisplayClassifier {
         let lead = members.max(by: { $0.cpuPercent < $1.cpuPercent }) ?? members[0]
         let kind = kindForRow(id: id, lead: lead, byPID: byPID)
         let bundle = owningBundlePath(lead, byPID: byPID)
-        let display = displayName(kind: kind, lead: lead, bundlePath: bundle)
+            ?? (id.hasPrefix("app:") ? String(id.dropFirst("app:".count)) : nil)
+        let display = displayName(
+            kind: kind,
+            lead: lead,
+            members: members,
+            bundlePath: bundle,
+            id: id,
+            byPID: byPID
+        )
         let icon = iconPath(kind: kind, lead: lead, bundlePath: bundle, byPID: byPID)
         let cpu = min(100, members.reduce(0) { $0 + $1.cpuPercent })
         let memoryBytes = members.reduce(UInt64(0)) { $0 + $1.memoryBytes }
@@ -226,7 +237,7 @@ nonisolated enum DisplayClassifier {
         if id == "chatgpt" { return .chatgpt }
         if id.hasPrefix("cursor-agent:") { return .cursorAgent }
         if id.hasPrefix("pi:") { return .pi }
-        if id == "corral" { return .corral }
+        if id.hasPrefix("corral") { return .corral }
         if id.hasPrefix("tool:") { return .namedTool }
         if id.hasPrefix("app:") { return .desktopApp }
         // proc: 独立行：即使责任 PID 指向某 .app，也不升成 desktopApp（否则保护行会解锁结束）。
@@ -235,16 +246,24 @@ nonisolated enum DisplayClassifier {
         return .other
     }
 
-    private static func displayName(kind: RowKind, lead: RawProcess, bundlePath: String?) -> String {
+    private static func displayName(
+        kind: RowKind,
+        lead: RawProcess,
+        members: [RawProcess],
+        bundlePath: String?,
+        id: String,
+        byPID: [pid_t: RawProcess]
+    ) -> String {
         switch kind {
         case .chatgpt:
             return "ChatGPT"
         case .cursorAgent:
-            return "Cursor Agent"
+            return agentDisplayName("Cursor Agent", members: members, byPID: byPID)
         case .pi:
-            return "pi"
+            return agentDisplayName("pi", members: members, byPID: byPID)
         case .corral:
-            return "Corral"
+            // `Corral.app` keeps its own desktop row; only TUI / remote servers land here.
+            return id.hasPrefix("corral-remote:") ? "Corral Remote" : "Corral TUI"
         case .namedTool:
             return toolHint(path: lead.path, arguments: lead.arguments, executableName: lead.executableName)
                 ?? lead.executableName
@@ -265,6 +284,10 @@ nonisolated enum DisplayClassifier {
         bundlePath: String?,
         byPID: [pid_t: RawProcess]
     ) -> String? {
+        // Synthetic kernel_task has no executable on disk; use the generic icon.
+        if lead.pid == 0 {
+            return nil
+        }
         if kind == .cursorAgent {
             let cursor = "/Applications/Cursor.app"
             if FileManager.default.fileExists(atPath: cursor) {
@@ -324,14 +347,130 @@ nonisolated enum DisplayClassifier {
     }
 
     static func isCorral(_ process: RawProcess) -> Bool {
+        // Never absorb the keep-alive server or any terminal: `tmux -D -L corral-keepalive`
+        // hosts every agent session, and ending it would take them all down.
+        if process.executableName.lowercased() == "tmux" { return false }
+        // Corral.app is a desktop app; `python -m corral` runs inside Python.app and stays Corral.
+        if let bundle = appBundlePath(in: process.path), !isInterpreterBundle(bundle) { return false }
         if process.executableName.lowercased() == "corral" { return true }
-        if process.path.localizedCaseInsensitiveContains("/corral") { return true }
-        if argumentsContain(process.arguments, token: "corral") { return true }
-        if let hint = toolHint(path: process.path, arguments: process.arguments, executableName: process.executableName),
-           hint.lowercased() == "corral" {
-            return true
+        guard let hint = toolHint(
+            path: process.path,
+            arguments: process.arguments,
+            executableName: process.executableName
+        )?.lowercased() else { return false }
+        // `corral.*` modules are the app's internal workers; they fold into their parent row.
+        return hint == "corral" || hint.hasPrefix("corral.")
+    }
+
+    /// One row per Corral instance instead of one bucket for the whole family.
+    private static func corralRowKey(_ process: RawProcess, byPID: [pid_t: RawProcess]) -> String {
+        if isCorralWorker(process),
+           let parent = byPID[process.ppid],
+           parent.pid != process.pid,
+           isCorral(parent) {
+            return isCorralRemote(parent) ? "corral-remote:\(parent.pid)" : "corral-tui:\(parent.pid)"
         }
-        return false
+        return isCorralRemote(process) ? "corral-remote:\(process.pid)" : "corral-tui:\(process.pid)"
+    }
+
+    private static func isCorralRemote(_ process: RawProcess) -> Bool {
+        process.arguments.contains("remote") && process.arguments.contains("_serve")
+    }
+
+    private static func isCorralWorker(_ process: RawProcess) -> Bool {
+        process.arguments.contains { $0.hasPrefix("corral.") }
+    }
+
+    /// Build and test children of a CLI agent belong to that agent's row (方案 A):
+    /// the row and its end action cover the whole burst instead of scattering
+    /// `tsc` / `node test`. The walk stops at terminals, tmux, Corral and desktop apps.
+    static func agentOwner(of process: RawProcess, byPID: [pid_t: RawProcess]) -> RawProcess? {
+        if isProtected(name: process.executableName, path: process.path, pid: process.pid) { return nil }
+        if let bundle = appBundlePath(in: process.path), !isInterpreterBundle(bundle) { return nil }
+        var current = process.ppid
+        var hops = 0
+        while current > 1, hops < 6 {
+            guard let parent = byPID[current] else { return nil }
+            if isPi(parent) { return parent }
+            if isCursorAgent(parent, byPID: byPID) { return parent }
+            if isCorral(parent) || isFoldingBarrier(parent) { return nil }
+            current = parent.ppid
+            hops += 1
+        }
+        return nil
+    }
+
+    /// Terminals and tmux end the fold: commands they start belong to themselves, not
+    /// to an assistant row. Plain shells (`zsh -c`, `bash`) are traversed on purpose.
+    private static let foldingBarrierNames: Set<String> = [
+        "tmux", "terminal", "iterm", "iterm2", "alacritty", "ghostty", "kitty", "warp",
+        "prompt", "sshd", "cursor"
+    ]
+
+    private static func isFoldingBarrier(_ process: RawProcess) -> Bool {
+        if foldingBarrierNames.contains(process.executableName.lowercased()) { return true }
+        guard let bundle = appBundlePath(in: process.path), !isInterpreterBundle(bundle) else {
+            return false
+        }
+        let app = URL(fileURLWithPath: bundle, isDirectory: true)
+            .deletingPathExtension()
+            .lastPathComponent
+            .lowercased()
+        return foldingBarrierNames.contains(app)
+    }
+
+    /// Cheap pre-check so the sampler only reads cwd for assistant processes.
+    static func needsWorkspaceContext(path: String, arguments: [String]) -> Bool {
+        let name = URL(fileURLWithPath: path, isDirectory: false).lastPathComponent.lowercased()
+        if ["pi", "corral", "agent", "mainthread"].contains(name) { return true }
+        if path.localizedCaseInsensitiveContains("cursor-agent") { return true }
+        if arguments.contains(where: { $0.localizedCaseInsensitiveContains("corral") }) { return true }
+        guard let hint = toolHint(path: path, arguments: arguments, executableName: name)?.lowercased() else {
+            return false
+        }
+        return hint == "pi" || hint == "corral" || hint.hasPrefix("corral.")
+    }
+
+    private static let genericWorkspaceLeaves: Set<String> = [
+        "cli", "src", "app", "app-macos", "app-ios", "app-android",
+        "server", "agent", "web", "docs", "tests"
+    ]
+
+    private static func agentDisplayName(
+        _ base: String,
+        members: [RawProcess],
+        byPID: [pid_t: RawProcess]
+    ) -> String {
+        // Prefer the session owner's cwd so folded child tasks (e.g. tsc) becoming lead
+        // never strip the workspace suffix from the row name.
+        let directory = members.first(where: {
+            $0.workingDirectory != nil && (isPi($0) || isCursorAgent($0, byPID: byPID))
+        })?.workingDirectory
+            ?? members.compactMap(\.workingDirectory).first
+        guard let workspace = workspaceLabel(directory) else { return base }
+        return "\(base) (\(workspace))"
+    }
+
+    /// Folder label for parallel sessions; generic leaves (`cli`, `src`, ...) include
+    /// their parent folder so `Corral/cli` and `AgentSync/cli` stay distinguishable.
+    static func workspaceLabel(_ directory: String?) -> String? {
+        guard var path = directory, !path.isEmpty else { return nil }
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        guard path != "/", path != home else {
+            return nil
+        }
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        let name = url.lastPathComponent
+        guard !name.isEmpty else { return nil }
+        if genericWorkspaceLeaves.contains(name.lowercased()) {
+            let parentURL = url.deletingLastPathComponent()
+            let parentName = parentURL.lastPathComponent
+            if parentURL.path != "/", parentURL.path != home, !parentName.isEmpty {
+                return "\(parentName)/\(name)"
+            }
+        }
+        return name
     }
 
     private static func isStandaloneNamedTool(_ process: RawProcess, hint: String, byPID: [pid_t: RawProcess]) -> Bool {
@@ -340,7 +479,7 @@ nonisolated enum DisplayClassifier {
         if process.path.contains(".app/Contents") { return false }
         if isChatGPTFamily(process, byPID: byPID) { return false }
         if let bundle = owningBundlePath(process, byPID: byPID) {
-            let appName = URL(fileURLWithPath: bundle).deletingPathExtension().lastPathComponent.lowercased()
+            let appName = URL(fileURLWithPath: bundle, isDirectory: true).deletingPathExtension().lastPathComponent.lowercased()
             return terminalAppNames.contains(appName)
         }
         return true
@@ -351,7 +490,7 @@ nonisolated enum DisplayClassifier {
             return path
         }
         if let responsible = byPID[process.responsiblePID], let path = appBundlePath(in: responsible.path) {
-            let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent.lowercased()
+            let name = URL(fileURLWithPath: path, isDirectory: true).deletingPathExtension().lastPathComponent.lowercased()
             if terminalAppNames.contains(name) { return nil }
             if isInterpreterBundle(path) { return nil }
             return path
@@ -360,12 +499,12 @@ nonisolated enum DisplayClassifier {
     }
 
     private static func isInterpreterBundle(_ bundlePath: String) -> Bool {
-        let name = URL(fileURLWithPath: bundlePath).deletingPathExtension().lastPathComponent.lowercased()
+        let name = URL(fileURLWithPath: bundlePath, isDirectory: true).deletingPathExtension().lastPathComponent.lowercased()
         return name.hasPrefix("python") || name == "node" || name == "nodejs"
     }
 
     static func appBundlePath(in executablePath: String) -> String? {
-        var url = URL(fileURLWithPath: executablePath)
+        var url = URL(fileURLWithPath: executablePath, isDirectory: false)
         var best: String?
         while url.path != "/" {
             url.deleteLastPathComponent()
@@ -377,12 +516,12 @@ nonisolated enum DisplayClassifier {
     }
 
     static func bundleDisplayName(_ bundlePath: String) -> String? {
-        guard let bundle = Bundle(url: URL(fileURLWithPath: bundlePath)) else {
-            return URL(fileURLWithPath: bundlePath).deletingPathExtension().lastPathComponent
+        guard let bundle = Bundle(url: URL(fileURLWithPath: bundlePath, isDirectory: true)) else {
+            return URL(fileURLWithPath: bundlePath, isDirectory: true).deletingPathExtension().lastPathComponent
         }
         return (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
             ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
-            ?? URL(fileURLWithPath: bundlePath).deletingPathExtension().lastPathComponent
+            ?? URL(fileURLWithPath: bundlePath, isDirectory: true).deletingPathExtension().lastPathComponent
     }
 
     private static func pathLooksLikeChatGPT(_ path: String) -> Bool {

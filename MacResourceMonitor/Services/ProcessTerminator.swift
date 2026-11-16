@@ -8,12 +8,17 @@ nonisolated enum TerminationOutcome: Sendable {
 }
 
 nonisolated enum ProcessTerminationSelection {
-    static func bulkCandidates(from rows: [ProcessRow], excludingPID: pid_t) -> [ProcessRow] {
+    static func bulkCandidates(
+        from rows: [ProcessRow],
+        excludingPID: pid_t,
+        whitelist: [WhitelistedApp] = []
+    ) -> [ProcessRow] {
         var seenRowIDs: Set<String> = []
         return rows.filter { row in
             row.canEnd
                 && !row.skipsBulkEnd
                 && !row.memberPIDs.contains(excludingPID)
+                && !EndWhitelist.isWhitelisted(row, entries: whitelist)
                 && seenRowIDs.insert(row.id).inserted
         }
     }
@@ -26,13 +31,19 @@ enum ProcessTerminator {
 
     static func end(_ row: ProcessRow) async -> TerminationOutcome {
         guard row.canEnd else { return .blocked }
+        // 白名单：UI 已置灰，这里是最后边界，防止旧快照/批量绕过。
+        if EndWhitelist.isWhitelisted(row, entries: WhitelistStore.shared.entries) {
+            return .blocked
+        }
         return await forceEnd(row.memberIdentities)
     }
 
     static func endAll(_ rows: [ProcessRow]) async -> TerminationOutcome {
+        let whitelist = WhitelistStore.shared.entries
         let candidates = ProcessTerminationSelection.bulkCandidates(
             from: rows,
-            excludingPID: getpid()
+            excludingPID: getpid(),
+            whitelist: whitelist
         )
         let targets = Array(Set(candidates.flatMap(\.memberIdentities)))
         return await forceEnd(targets)
@@ -66,6 +77,9 @@ enum ProcessTerminator {
 
     /// 仍是当初那只进程，且不是系统保护目标，才允许发信号。
     private static func shouldSignal(_ identity: ProcessIdentity) -> Bool {
+        // PID 0 / 1 and negative PIDs must never reach kill(2): `kill(0, ...)` targets
+        // the whole process group, and the synthetic kernel_task row uses PID 0.
+        guard identity.pid > 1 else { return false }
         guard isSameProcess(identity) else { return false }
         guard let path = path(for: identity.pid) else { return false }
         let name = URL(fileURLWithPath: path).lastPathComponent
